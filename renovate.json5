@@ -21,19 +21,6 @@
       'security',
     ],
   },
-  customManagers: [
-    {
-      customType: 'regex',
-      managerFilePatterns: [
-        '/go\\.mod$/',
-      ],
-      matchStrings: [
-        'go (?<currentValue>\\d+\\.\\d+\\.\\d+)\\n',
-      ],
-      depNameTemplate: 'golang',
-      datasourceTemplate: 'golang-version',
-    },
-  ],
   packageRules: [
     {
       matchDepNames: [
