@@ -22,7 +22,7 @@ builds:
       - linux
       - windows
       - darwin
-    binary: "{{ .ProjectName }}"
+    binary: diary-cli
 
 archives:
   - formats: [ 'tar.gz' ]
