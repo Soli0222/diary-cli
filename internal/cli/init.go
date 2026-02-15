@@ -42,7 +42,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	scanner := bufio.NewScanner(os.Stdin)
-	fmt.Println("📝 diary-cli の初期設定を行います\n")
+	fmt.Println("📝 diary-cli の初期設定を行います")
 
 	// Misskey settings
 	fmt.Println("--- Misskey設定 ---")

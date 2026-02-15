@@ -91,7 +91,7 @@ func (c *Client) Chat(system string, messages []Message) (string, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("Claude API error: %d - %s", resp.StatusCode, string(body))
+		return "", fmt.Errorf("claude API error: %d - %s", resp.StatusCode, string(body))
 	}
 
 	var result messagesResponse
