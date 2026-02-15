@@ -60,7 +60,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 
 	// 3. Interactive chat session
 	claudeClient := claude.NewClient(cfg.Claude.APIKey, cfg.Claude.Model)
-	session := chat.NewSession(claudeClient, formattedNotes, cfg.Chat.MaxQuestions, cfg.Chat.MinQuestions)
+	session := chat.NewSession(claudeClient, formattedNotes, len(notes), cfg.Chat.MaxQuestions, cfg.Chat.MinQuestions)
 
 	conversation, err := session.Run()
 	if err != nil {
