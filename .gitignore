@@ -35,7 +35,7 @@ go.work.sum
 .vscode/
 
 # Binary
-diary-cli
+/diary-cli
 
 # Goreleaser
 /dist
