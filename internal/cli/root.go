@@ -11,6 +11,9 @@ import (
 var (
 	flagDate      string
 	flagYesterday bool
+
+	// Version is set at build time via ldflags.
+	Version = "dev"
 )
 
 func NewRootCmd() *cobra.Command {
@@ -26,6 +29,7 @@ func NewRootCmd() *cobra.Command {
 	cmd.AddCommand(newRunCmd())
 	cmd.AddCommand(newSummaryCmd())
 	cmd.AddCommand(newPushCmd())
+	cmd.AddCommand(newVersionCmd())
 
 	return cmd
 }

@@ -19,6 +19,8 @@ builds:
   - main: ./cmd/diary-cli
     env:
       - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X github.com/soli0222/diary-cli/internal/cli.Version={{.Version}}
     goos:
       - linux
       - windows
