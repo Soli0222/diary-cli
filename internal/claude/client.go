@@ -10,10 +10,10 @@ import (
 )
 
 const (
-	DefaultModel  = "claude-sonnet-4-20250514"
-	apiBaseURL    = "https://api.anthropic.com/v1"
-	apiVersion    = "2023-06-01"
-	maxTokens     = 4096
+	DefaultModel = "claude-sonnet-4-5-20250929"
+	apiBaseURL   = "https://api.anthropic.com/v1"
+	apiVersion   = "2023-06-01"
+	maxTokens    = 4096
 )
 
 type Client struct {
