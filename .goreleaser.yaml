@@ -22,7 +22,7 @@ builds:
       - linux
       - windows
       - darwin
-    binary: vip-responder
+    binary: "{{ .ProjectName }}"
 
 archives:
   - formats: [ 'tar.gz' ]
