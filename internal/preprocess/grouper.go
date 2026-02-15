@@ -4,9 +4,12 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/soli0222/diary-cli/internal/models"
 )
+
+var jst = time.FixedZone("Asia/Tokyo", 9*60*60)
 
 // TimeGroup represents a group of notes in a time period.
 type TimeGroup struct {
@@ -46,7 +49,7 @@ func GroupNotes(notes []models.Note) []TimeGroup {
 	}
 
 	for _, n := range filtered {
-		hour := n.CreatedAt.Hour()
+		hour := n.CreatedAt.In(jst).Hour()
 		var label string
 		switch {
 		case hour >= 5 && hour < 9:
@@ -78,7 +81,7 @@ func FormatGroupedNotes(groups []TimeGroup) string {
 	for _, g := range groups {
 		sb.WriteString(fmt.Sprintf("## %s\n", g.Label))
 		for _, n := range g.Notes {
-			ts := n.CreatedAt.Format("15:04")
+			ts := n.CreatedAt.In(jst).Format("15:04")
 			text := n.GetDisplayText()
 			if text == "" {
 				continue
@@ -105,7 +108,7 @@ func FormatAllNotes(notes []models.Note) string {
 
 	var sb strings.Builder
 	for _, n := range filtered {
-		ts := n.CreatedAt.Format("15:04")
+		ts := n.CreatedAt.In(jst).Format("15:04")
 		text := n.GetDisplayText()
 		if text == "" {
 			continue
