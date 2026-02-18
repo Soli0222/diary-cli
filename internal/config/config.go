@@ -48,7 +48,7 @@ func Load() (*Config, error) {
 	viper.AddConfigPath(configDir)
 
 	// Defaults
-	viper.SetDefault("claude.model", "claude-sonnet-4-20250514")
+	viper.SetDefault("claude.model", "claude-sonnet-4-6")
 	viper.SetDefault("diary.author", "Soli")
 	viper.SetDefault("diary.editor", "")
 	viper.SetDefault("chat.max_questions", 8)

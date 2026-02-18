@@ -52,7 +52,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// Claude settings
 	fmt.Println("\n--- Claude API設定 ---")
 	apiKey := prompt(scanner, "Claude APIキー", "")
-	model := prompt(scanner, "モデル", "claude-sonnet-4-20250514")
+	model := prompt(scanner, "モデル", "claude-sonnet-4-6")
 
 	// Diary settings
 	fmt.Println("\n--- 日記設定 ---")

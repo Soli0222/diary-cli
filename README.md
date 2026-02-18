@@ -48,7 +48,7 @@ misskey:
 
 claude:
   api_key: "your-claude-api-key"
-  model: "claude-sonnet-4-20250514"
+  model: "claude-sonnet-4-6"
 
 diary:
   output_dir: "/path/to/diary"

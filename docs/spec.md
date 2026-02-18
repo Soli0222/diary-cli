@@ -160,7 +160,7 @@ misskey:
 # Claude API設定
 claude:
   api_key: "your-claude-api-key"
-  model: "claude-sonnet-4-20250514"
+  model: "claude-sonnet-4-6"
 
 # 日記設定
 diary:
