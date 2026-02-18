@@ -79,14 +79,14 @@ func GroupNotes(notes []models.Note) []TimeGroup {
 func FormatGroupedNotes(groups []TimeGroup) string {
 	var sb strings.Builder
 	for _, g := range groups {
-		sb.WriteString(fmt.Sprintf("## %s\n", g.Label))
+		fmt.Fprintf(&sb, "## %s\n", g.Label)
 		for _, n := range g.Notes {
 			ts := n.CreatedAt.In(jst).Format("15:04")
 			text := n.GetDisplayText()
 			if text == "" {
 				continue
 			}
-			sb.WriteString(fmt.Sprintf("- [%s] %s\n", ts, text))
+			fmt.Fprintf(&sb, "- [%s] %s\n", ts, text)
 		}
 		sb.WriteString("\n")
 	}
@@ -113,7 +113,7 @@ func FormatAllNotes(notes []models.Note) string {
 		if text == "" {
 			continue
 		}
-		sb.WriteString(fmt.Sprintf("- [%s] %s\n", ts, text))
+		fmt.Fprintf(&sb, "- [%s] %s\n", ts, text)
 	}
 	return sb.String()
 }
