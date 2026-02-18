@@ -52,7 +52,7 @@ func (g *Generator) GenerateDiary(conversation []claude.Message) (string, error)
 		if msg.Role == "assistant" {
 			role = "インタビュアー"
 		}
-		sb.WriteString(fmt.Sprintf("%s: %s\n\n", role, msg.Content))
+		fmt.Fprintf(&sb, "%s: %s\n\n", role, msg.Content)
 	}
 
 	msgs := []claude.Message{
@@ -94,8 +94,8 @@ func BuildMarkdown(date time.Time, author, title, diaryBody, summary string) str
 
 	var sb strings.Builder
 	sb.WriteString("---\n")
-	sb.WriteString(fmt.Sprintf("title: %s\n", dateStr))
-	sb.WriteString(fmt.Sprintf("author: %s\n", author))
+	fmt.Fprintf(&sb, "title: %s\n", dateStr)
+	fmt.Fprintf(&sb, "author: %s\n", author)
 	sb.WriteString("layout: post\n")
 	sb.WriteString(fmt.Sprintf("date: %s\n", timeStr))
 	sb.WriteString("category: 日記\n")
