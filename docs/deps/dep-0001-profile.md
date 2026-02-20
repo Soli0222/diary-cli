@@ -12,8 +12,9 @@ In Progress
   - Not Done: 「自然文出力」と「内部状態更新」を厳密に分離したターンスキーマ運用（現状はヒントベース）
 - Phase C: Partial
   - Done: 対話履歴からの更新候補抽出（Claude JSON）とマージ処理
-  - Not Done: 矛盾検知を `conflict` エンティティとして明示管理する仕組み
-  - Not Done: `inferred` から `confirmed` への段階昇格を確認質問結果で厳密に制御する仕組み
+  - Done: 矛盾候補を `conflicts` として永続化し、衝突値を本反映せず `pending_confirmations` に退避
+  - Done: `inferred` は本反映せず `pending_confirmations` に保持し、`observed/confirmed` 到来時のみ本反映
+  - Not Done: 確認質問の成功を明示的にトラッキングして `confirmed` 昇格させるターン連動制御
 - Phase D: Not Started
   - 観測指標（要約確認率・重複質問率・回答文字数推移）の計測基盤
 - Cross-cutting: Done

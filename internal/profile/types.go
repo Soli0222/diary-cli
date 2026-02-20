@@ -30,21 +30,44 @@ type UserPreferences struct {
 }
 
 type UserProfile struct {
-	Version           int             `json:"version"`
-	UpdatedAt         string          `json:"updated_at,omitempty"`
-	StableFacts       []ProfileItem   `json:"stable_facts,omitempty"`
-	Preferences       UserPreferences `json:"preferences,omitempty"`
-	OngoingTopics     []ProfileItem   `json:"ongoing_topics,omitempty"`
-	EffectivePatterns []ProfileItem   `json:"effective_patterns,omitempty"`
-	SensitiveTopics   []ProfileItem   `json:"sensitive_topics,omitempty"`
+	Version              int                   `json:"version"`
+	UpdatedAt            string                `json:"updated_at,omitempty"`
+	StableFacts          []ProfileItem         `json:"stable_facts,omitempty"`
+	Preferences          UserPreferences       `json:"preferences,omitempty"`
+	OngoingTopics        []ProfileItem         `json:"ongoing_topics,omitempty"`
+	EffectivePatterns    []ProfileItem         `json:"effective_patterns,omitempty"`
+	SensitiveTopics      []ProfileItem         `json:"sensitive_topics,omitempty"`
+	Conflicts            []ProfileConflict     `json:"conflicts,omitempty"`
+	PendingConfirmations []PendingConfirmation `json:"pending_confirmations,omitempty"`
+}
+
+type ProfileConflict struct {
+	Category      string  `json:"category"`
+	ExistingValue string  `json:"existing_value"`
+	IncomingValue string  `json:"incoming_value"`
+	Confidence    float64 `json:"confidence,omitempty"`
+	SourceDate    string  `json:"source_date,omitempty"`
+	DetectedAt    string  `json:"detected_at,omitempty"`
+	Resolved      bool    `json:"resolved,omitempty"`
+}
+
+type PendingConfirmation struct {
+	Category      string  `json:"category"`
+	Value         string  `json:"value"`
+	Confidence    float64 `json:"confidence"`
+	FirstSeen     string  `json:"first_seen,omitempty"`
+	LastSeen      string  `json:"last_seen,omitempty"`
+	SourceDate    string  `json:"source_date,omitempty"`
+	Confirmations int     `json:"confirmations,omitempty"`
 }
 
 type CandidateUpdates struct {
-	StableFacts       []ProfileItem   `json:"stable_facts,omitempty"`
-	Preferences       UserPreferences `json:"preferences,omitempty"`
-	OngoingTopics     []ProfileItem   `json:"ongoing_topics,omitempty"`
-	EffectivePatterns []ProfileItem   `json:"effective_patterns,omitempty"`
-	SensitiveTopics   []ProfileItem   `json:"sensitive_topics,omitempty"`
+	StableFacts       []ProfileItem     `json:"stable_facts,omitempty"`
+	Preferences       UserPreferences   `json:"preferences,omitempty"`
+	OngoingTopics     []ProfileItem     `json:"ongoing_topics,omitempty"`
+	EffectivePatterns []ProfileItem     `json:"effective_patterns,omitempty"`
+	SensitiveTopics   []ProfileItem     `json:"sensitive_topics,omitempty"`
+	Conflicts         []ProfileConflict `json:"conflicts,omitempty"`
 }
 
 func NewEmpty() *UserProfile {
@@ -81,6 +104,15 @@ func SummaryForPrompt(p *UserProfile, maxItems int) string {
 	appendItems("継続トピック", p.OngoingTopics)
 	appendItems("有効だった質問傾向", p.EffectivePatterns)
 	appendItems("慎重に扱う話題", p.SensitiveTopics)
+	if len(p.PendingConfirmations) > 0 {
+		limit := min(len(p.PendingConfirmations), maxItems)
+		vals := make([]string, 0, limit)
+		for i := 0; i < limit; i++ {
+			item := p.PendingConfirmations[i]
+			vals = append(vals, fmt.Sprintf("%s:%s(%.2f)", item.Category, item.Value, item.Confidence))
+		}
+		lines = append(lines, fmt.Sprintf("- 未確認の仮説（確認優先）: %s", strings.Join(vals, ", ")))
+	}
 
 	if p.Preferences.EmpathyStyle != "" || p.Preferences.QuestionDepth != "" || len(p.Preferences.AvoidTopics) > 0 {
 		pref := []string{}

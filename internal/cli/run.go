@@ -158,7 +158,7 @@ func loadUserProfile(cfg *config.Config) (*profile.UserProfile, string) {
 }
 
 func updateUserProfile(client *claude.Client, current *profile.UserProfile, path string, conversation []claude.Message, date time.Time) error {
-	updates, err := profile.ExtractUpdates(client, conversation, date)
+	updates, err := profile.ExtractUpdates(client, conversation, date, current)
 	if err != nil {
 		return fmt.Errorf("learning extraction failed: %w", err)
 	}

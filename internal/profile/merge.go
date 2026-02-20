@@ -18,11 +18,12 @@ func Merge(base *UserProfile, updates *CandidateUpdates, sourceDate time.Time) *
 
 	merged := *base
 	dateStr := sourceDate.Format("2006-01-02")
+	blocked := mergeConflicts(&merged, updates.Conflicts, dateStr)
 
-	merged.StableFacts = mergeItems(merged.StableFacts, updates.StableFacts, dateStr)
-	merged.OngoingTopics = mergeItems(merged.OngoingTopics, updates.OngoingTopics, dateStr)
-	merged.EffectivePatterns = mergeItems(merged.EffectivePatterns, updates.EffectivePatterns, dateStr)
-	merged.SensitiveTopics = mergeItems(merged.SensitiveTopics, updates.SensitiveTopics, dateStr)
+	merged.StableFacts = mergeItems("stable_facts", merged.StableFacts, updates.StableFacts, dateStr, &merged.PendingConfirmations, blocked)
+	merged.OngoingTopics = mergeItems("ongoing_topics", merged.OngoingTopics, updates.OngoingTopics, dateStr, &merged.PendingConfirmations, blocked)
+	merged.EffectivePatterns = mergeItems("effective_patterns", merged.EffectivePatterns, updates.EffectivePatterns, dateStr, &merged.PendingConfirmations, blocked)
+	merged.SensitiveTopics = mergeItems("sensitive_topics", merged.SensitiveTopics, updates.SensitiveTopics, dateStr, &merged.PendingConfirmations, blocked)
 	merged.Preferences = mergePreferences(merged.Preferences, updates.Preferences)
 
 	applyDecay(merged.StableFacts)
@@ -63,7 +64,7 @@ func mergePreferences(base, incoming UserPreferences) UserPreferences {
 	return result
 }
 
-func mergeItems(base, incoming []ProfileItem, dateStr string) []ProfileItem {
+func mergeItems(category string, base, incoming []ProfileItem, dateStr string, pending *[]PendingConfirmation, blocked map[string]struct{}) []ProfileItem {
 	if len(incoming) == 0 {
 		return base
 	}
@@ -89,6 +90,15 @@ func mergeItems(base, incoming []ProfileItem, dateStr string) []ProfileItem {
 			item.SourceDate = dateStr
 		}
 		item.LastSeen = nowRFC3339()
+		blockKey := category + ":" + key
+		if _, isBlocked := blocked[blockKey]; isBlocked {
+			addOrUpdatePending(pending, category, item, dateStr)
+			continue
+		}
+		if item.Status == StatusInferred {
+			addOrUpdatePending(pending, category, item, dateStr)
+			continue
+		}
 		if idx, ok := indexByValue[key]; ok {
 			existing := result[idx]
 			existing.Confidence = math.Max(existing.Confidence, item.Confidence)
@@ -96,13 +106,103 @@ func mergeItems(base, incoming []ProfileItem, dateStr string) []ProfileItem {
 			existing.SourceDate = item.SourceDate
 			existing.Status = mergeStatus(existing.Status, item.Status)
 			result[idx] = existing
+			clearPending(pending, category, item.Value)
 			continue
 		}
 		result = append(result, item)
 		indexByValue[key] = len(result) - 1
+		clearPending(pending, category, item.Value)
 	}
 
 	return result
+}
+
+func mergeConflicts(profile *UserProfile, incoming []ProfileConflict, dateStr string) map[string]struct{} {
+	blocked := map[string]struct{}{}
+	if profile == nil || len(incoming) == 0 {
+		return blocked
+	}
+
+	existingIdx := make(map[string]int, len(profile.Conflicts))
+	for i, c := range profile.Conflicts {
+		k := conflictKey(c.Category, c.ExistingValue, c.IncomingValue)
+		existingIdx[k] = i
+	}
+
+	for _, c := range incoming {
+		c.Category = strings.TrimSpace(c.Category)
+		c.ExistingValue = strings.TrimSpace(c.ExistingValue)
+		c.IncomingValue = strings.TrimSpace(c.IncomingValue)
+		if c.Category == "" || c.IncomingValue == "" {
+			continue
+		}
+		c.Confidence = clampConfidence(c.Confidence)
+		if c.SourceDate == "" {
+			c.SourceDate = dateStr
+		}
+		c.DetectedAt = nowRFC3339()
+		k := conflictKey(c.Category, c.ExistingValue, c.IncomingValue)
+		if idx, ok := existingIdx[k]; ok {
+			prev := profile.Conflicts[idx]
+			prev.Confidence = math.Max(prev.Confidence, c.Confidence)
+			prev.SourceDate = c.SourceDate
+			prev.DetectedAt = c.DetectedAt
+			profile.Conflicts[idx] = prev
+		} else {
+			profile.Conflicts = append(profile.Conflicts, c)
+			existingIdx[k] = len(profile.Conflicts) - 1
+		}
+		blocked[c.Category+":"+normalize(c.IncomingValue)] = struct{}{}
+	}
+	return blocked
+}
+
+func conflictKey(category, existingValue, incomingValue string) string {
+	return normalize(category) + "|" + normalize(existingValue) + "|" + normalize(incomingValue)
+}
+
+func addOrUpdatePending(pending *[]PendingConfirmation, category string, item ProfileItem, dateStr string) {
+	if pending == nil {
+		return
+	}
+	now := nowRFC3339()
+	key := normalize(category) + ":" + normalize(item.Value)
+	for i := range *pending {
+		p := &(*pending)[i]
+		if normalize(p.Category)+":"+normalize(p.Value) != key {
+			continue
+		}
+		p.Confidence = math.Max(p.Confidence, item.Confidence)
+		p.LastSeen = now
+		p.SourceDate = dateStr
+		p.Confirmations++
+		return
+	}
+
+	*pending = append(*pending, PendingConfirmation{
+		Category:      category,
+		Value:         item.Value,
+		Confidence:    item.Confidence,
+		FirstSeen:     now,
+		LastSeen:      now,
+		SourceDate:    dateStr,
+		Confirmations: 1,
+	})
+}
+
+func clearPending(pending *[]PendingConfirmation, category, value string) {
+	if pending == nil || len(*pending) == 0 {
+		return
+	}
+	key := normalize(category) + ":" + normalize(value)
+	dst := (*pending)[:0]
+	for _, p := range *pending {
+		if normalize(p.Category)+":"+normalize(p.Value) == key {
+			continue
+		}
+		dst = append(dst, p)
+	}
+	*pending = dst
 }
 
 func applyDecay(items []ProfileItem) {
