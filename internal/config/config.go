@@ -13,6 +13,7 @@ type Config struct {
 	Claude  ClaudeConfig  `mapstructure:"claude"`
 	Diary   DiaryConfig   `mapstructure:"diary"`
 	Chat    ChatConfig    `mapstructure:"chat"`
+	Summaly SummalyConfig `mapstructure:"summaly"`
 }
 
 type MisskeyConfig struct {
@@ -36,6 +37,10 @@ type ChatConfig struct {
 	MinQuestions int `mapstructure:"min_questions"`
 }
 
+type SummalyConfig struct {
+	Endpoint string `mapstructure:"endpoint"`
+}
+
 func Load() (*Config, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -53,6 +58,7 @@ func Load() (*Config, error) {
 	viper.SetDefault("diary.editor", "")
 	viper.SetDefault("chat.max_questions", 8)
 	viper.SetDefault("chat.min_questions", 3)
+	viper.SetDefault("summaly.endpoint", "")
 
 	if err := viper.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("failed to read config: %w", err)

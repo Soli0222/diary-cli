@@ -65,6 +65,10 @@ func runInit(cmd *cobra.Command, args []string) error {
 	maxQ := prompt(scanner, "最大質問数", "8")
 	minQ := prompt(scanner, "最低質問数", "3")
 
+	// Summaly settings
+	fmt.Println("\n--- Summaly設定（任意） ---")
+	summalyEndpoint := prompt(scanner, "Summalyエンドポイント", "")
+
 	// Build config YAML
 	config := fmt.Sprintf(`# Misskey設定
 misskey:
@@ -86,7 +90,11 @@ diary:
 chat:
   max_questions: %s
   min_questions: %s
-`, instanceURL, token, apiKey, model, outputDir, author, editor, maxQ, minQ)
+
+# Summaly設定（任意）
+summaly:
+  endpoint: "%s"
+`, instanceURL, token, apiKey, model, outputDir, author, editor, maxQ, minQ, summalyEndpoint)
 
 	// Create directory and write file
 	if err := os.MkdirAll(configDir, 0755); err != nil {

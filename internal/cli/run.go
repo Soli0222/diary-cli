@@ -47,6 +47,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	notes = preprocess.EnrichNotesWithSummaly(notes, preprocess.NewSummalyClientWithEndpoint(cfg.Summaly.Endpoint))
 	fmt.Printf("📥 Misskeyから%d件のノートを取得しました\n", len(notes))
 
 	if len(notes) == 0 {

@@ -172,7 +172,14 @@ diary:
 chat:
   max_questions: 8
   min_questions: 3
+
+# Summaly設定（任意）
+summaly:
+  endpoint: ""
 ```
+
+`summaly.endpoint` には Summaly API のURLを設定する。  
+本家実装: [misskey-dev/summaly](https://github.com/misskey-dev/summaly)
 
 ## モジュール構成
 
