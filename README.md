@@ -1,17 +1,18 @@
 # diary-cli
 
-Misskeyのノートを元にAI（Claude）と対話しながら日記を生成するCLIツール。
+Misskeyノートをもとに Claude と対話しながら日記を作成する CLI ツールです。
 
-対話を通じてユーザーの言語化力を鍛えつつ、質の高い日記を生成することを目的とする。
+単発生成ではなく、毎日の利用でユーザープロファイルを学習し、質問の質を改善します。
 
-## 全体フロー
+## 主な機能
 
-1. Misskeyノート取得（当日 or 指定日）
-2. ノートの前処理（時系列ソート・時間帯グルーピング）
-3. Claude APIと対話セッション（事実確認 → 深掘り → 締め）
-4. 対話履歴を元に日記Markdown生成
-5. Misskeyサマリー生成
-6. ファイル出力 → エディタで確認 → git push
+- Misskey ノート取得（当日/昨日/指定日）
+- 3フェーズ対話（事実確認 -> 深掘り -> 締め）
+- ノートが少ない日の専用対話モード
+- 学習プロファイル（継続情報、未確認仮説、矛盾管理）
+- 対話結果を使った日記本文・サマリー・タイトル生成
+- run 完了時のメトリクス表示
+- `stats` コマンドによる時系列メトリクス集計
 
 ## インストール
 
@@ -29,7 +30,7 @@ make build
 
 ## セットアップ
 
-対話的に設定ファイルを生成できます:
+対話式セットアップ:
 
 ```bash
 diary-cli init
@@ -37,9 +38,9 @@ diary-cli init
 
 `~/.config/diary-cli/config.yaml` が作成されます。
 
-### 手動で設定する場合
+## 設定ファイル
 
-`~/.config/diary-cli/config.yaml` を作成:
+パス: `~/.config/diary-cli/config.yaml`
 
 ```yaml
 misskey:
@@ -58,24 +59,32 @@ diary:
 chat:
   max_questions: 8
   min_questions: 3
+  summary_every: 2
+  max_unknowns_before_confirm: 3
+  empathy_style: "balanced" # light|balanced|deep
+  profile_enabled: true
+  profile_path: "" # 空なら ~/.config/diary-cli/profile.json
 
 summaly:
   endpoint: ""
 ```
 
-`summaly.endpoint` には Summaly API のURLを設定してください。  
-本家実装: [misskey-dev/summaly](https://github.com/misskey-dev/summaly)
+### 主要デフォルト
+
+- `claude.model`: `claude-sonnet-4-6`
+- `chat.max_questions`: `8`
+- `chat.min_questions`: `3`
+- `chat.summary_every`: `2`
+- `chat.max_unknowns_before_confirm`: `3`
+- `chat.empathy_style`: `balanced`
+- `chat.profile_enabled`: `true`
 
 ## 使い方
 
 ```bash
-# 今日の日記を作成（対話 → 日記生成 → サマリー生成 → 保存）
+# 日記作成（対話 -> 学習更新 -> 本文/サマリー/タイトル生成）
 diary-cli run
-
-# 昨日の日記を作成
 diary-cli run --yesterday
-
-# 特定日の日記を作成
 diary-cli run --date 2026-02-14
 
 # サマリーのみ生成（対話スキップ）
@@ -83,45 +92,93 @@ diary-cli summary
 diary-cli summary --yesterday
 diary-cli summary --date 2026-02-14
 
-# 対話メトリクスを確認（直近7日）
-diary-cli stats
-diary-cli stats --days 14
-
 # 生成済みファイルをgit commit & push
 diary-cli push
 diary-cli push --yesterday
 diary-cli push --date 2026-02-14
+
+# 対話メトリクス集計
+diary-cli stats
+diary-cli stats --days 14
 ```
 
-## 対話セッション
+## run の挙動
 
-`run` コマンドでは、Claudeが3つのフェーズで質問します:
+`run` は以下を実行します。
 
-1. **事実確認**（1〜3問）: ノートの経緯・背景を聞く
-2. **深掘り**（1〜3問）: 感情・理由・内省を促す
-3. **締め**（1〜2問）: 一日の総括
+1. Misskey ノート取得・前処理
+2. 学習済みプロファイル読み込み
+3. 対話セッション
+4. プロファイル更新（学習抽出・矛盾管理・確認昇格）
+5. 日記本文/サマリー/タイトル生成
+6. Markdown 保存
+7. 実行メトリクス表示・保存
 
-対話中に `/done` を入力すると終了します（最低3問は回答が必要）。
+対話中に `/done` で終了できます（`min_questions` 未満では終了不可）。
 
-`run` 完了後には、質問数・要約確認・確認成功率・平均回答文字数などのメトリクスが表示されます。
-履歴は `~/.config/diary-cli/metrics.jsonl` に保存され、`stats` コマンドで時系列集計を確認できます。
+## 学習プロファイル
+
+保存先:
+- デフォルト: `~/.config/diary-cli/profile.json`
+
+扱う情報（抜粋）:
+- `stable_facts`
+- `ongoing_topics`
+- `effective_patterns`
+- `sensitive_topics`
+- `conflicts`
+- `pending_confirmations`
+- `confirmation_history`
+
+概要:
+- `inferred` は即反映せず pending に保持
+- 確認質問で `confirmed` へ昇格
+- 矛盾候補は `conflicts` に保持し、本反映は保留
+
+## メトリクス
+
+### run 直後に表示される項目
+
+- 質問数
+- 要約確認ターン数
+- 構造化ターン数 / フォールバック数
+- 確認結果（試行/確定/否定/不確実）
+- 平均回答文字数
+- 重複質問率
+- プロファイル変化（stable/pending/conflicts）
+
+### 保存先
+
+- `~/.config/diary-cli/metrics.jsonl`（1行1JSON）
+
+### stats で見られるもの
+
+`diary-cli stats --days N` で、期間集計と日別サマリを表示します。
 
 ## 出力形式
 
 ```markdown
 ---
-title: 2026-02-15
-author: Soli
+title: YYYY-MM-DD
+author: <author>
 layout: post
-date: 2026-02-15T23:30
+date: YYYY-MM-DDTHH:mm
 category: 日記
 ---
 
-# AIが提案するタイトル
+# <生成タイトル>
 
-対話から生成された日記本文
+<日記本文>
 
 # Misskeyサマリー
 
-時系列サマリー
+<時系列サマリー>
 ```
+
+## 開発
+
+```bash
+go test ./...
+```
+
+仕様詳細は `docs/spec.md` を参照してください。
