@@ -3,8 +3,10 @@ package chat
 import (
 	"bufio"
 	"fmt"
+	"math"
 	"os"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/soli0222/diary-cli/internal/claude"
 )
@@ -33,6 +35,19 @@ type ConfirmationOutcome struct {
 	Uncertain   bool
 	Method      string
 	Reason      string
+}
+
+type Metrics struct {
+	QuestionsTotal        int
+	SummaryCheckTurns     int
+	StructuredTurns       int
+	FallbackTurns         int
+	ConfirmationAttempts  int
+	ConfirmationConfirmed int
+	ConfirmationDenied    int
+	ConfirmationUncertain int
+	AvgAnswerLength       float64
+	DuplicateQuestionRate float64
 }
 
 func buildSystemPromptNormal(p1Count, p2Count, p3Count int, notes, profileSummary string) string {
@@ -138,6 +153,9 @@ type Session struct {
 	pendingHypotheses        []PendingHypothesis
 	activeConfirmation       *PendingHypothesis
 	confirmationOutcomes     []ConfirmationOutcome
+	structuredTurns          int
+	fallbackTurns            int
+	summaryCheckTurns        int
 }
 
 // phaseBoundaries computes phase transition points based on maxQuestions.
@@ -468,9 +486,18 @@ func (s *Session) nextQuestion() (string, error) {
 	}
 	turn, err := parseTurnResponse(raw)
 	if err == nil {
+		s.structuredTurns++
+		if turn.SummaryCheck {
+			s.summaryCheckTurns++
+		}
 		return turn.Question, nil
 	}
-	return fallbackQuestion(raw), nil
+	s.fallbackTurns++
+	q := fallbackQuestion(raw)
+	if strings.Contains(q, "つまり") {
+		s.summaryCheckTurns++
+	}
+	return q, nil
 }
 
 // GetMessages returns the conversation messages.
@@ -482,4 +509,65 @@ func (s *Session) GetConfirmationOutcomes() []ConfirmationOutcome {
 	out := make([]ConfirmationOutcome, len(s.confirmationOutcomes))
 	copy(out, s.confirmationOutcomes)
 	return out
+}
+
+func (s *Session) GetMetrics() Metrics {
+	m := Metrics{
+		QuestionsTotal:        s.questionNum,
+		SummaryCheckTurns:     s.summaryCheckTurns,
+		StructuredTurns:       s.structuredTurns,
+		FallbackTurns:         s.fallbackTurns,
+		ConfirmationAttempts:  len(s.confirmationOutcomes),
+		ConfirmationConfirmed: 0,
+		ConfirmationDenied:    0,
+		ConfirmationUncertain: 0,
+	}
+
+	var answerChars int
+	questionSet := map[string]int{}
+	questionCount := 0
+	for i := 0; i < len(s.messages); i++ {
+		msg := s.messages[i]
+		switch msg.Role {
+		case "assistant":
+			key := normalizeQuestionForMetric(msg.Content)
+			if key != "" {
+				questionSet[key]++
+				questionCount++
+			}
+		case "user":
+			answerChars += utf8.RuneCountInString(msg.Content)
+		}
+	}
+
+	if m.QuestionsTotal > 0 {
+		m.AvgAnswerLength = float64(answerChars) / float64(m.QuestionsTotal)
+	}
+	if questionCount > 0 {
+		duplicates := questionCount - len(questionSet)
+		m.DuplicateQuestionRate = float64(duplicates) / float64(questionCount)
+		m.DuplicateQuestionRate = math.Max(0, math.Min(1, m.DuplicateQuestionRate))
+	}
+
+	for _, outcome := range s.confirmationOutcomes {
+		switch {
+		case outcome.Confirmed:
+			m.ConfirmationConfirmed++
+		case outcome.Denied:
+			m.ConfirmationDenied++
+		default:
+			m.ConfirmationUncertain++
+		}
+	}
+
+	return m
+}
+
+func normalizeQuestionForMetric(q string) string {
+	q = strings.TrimSpace(strings.ToLower(q))
+	if q == "" {
+		return ""
+	}
+	replacer := strings.NewReplacer("？", "?", "。", "", "、", "", " ", "", "\t", "")
+	return replacer.Replace(q)
 }

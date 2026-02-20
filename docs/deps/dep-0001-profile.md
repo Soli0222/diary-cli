@@ -1,7 +1,7 @@
 # DEP-0001: Daily Learning Profile for Interviewer
 
 ## Status
-In Progress
+Done
 
 ### Implementation Status (2026-02-20)
 - Phase A: Done
@@ -16,8 +16,10 @@ In Progress
   - Done: 矛盾候補を `conflicts` として永続化し、衝突値を本反映せず `pending_confirmations` に退避
   - Done: `inferred` は本反映せず `pending_confirmations` に保持し、`observed/confirmed` 到来時のみ本反映
   - Done: 確認質問の成功結果を適用して `pending_confirmations` から `confirmed` へ昇格
-- Phase D: Not Started
-  - 観測指標（要約確認率・重複質問率・回答文字数推移）の計測基盤
+- Phase D: Done
+  - Done: `run` 完了後に実行メトリクスを表示（質問数、要約確認率、確認成功率、平均回答文字数、重複質問率、プロファイル変化）
+  - Done: 実行メトリクスを `~/.config/diary-cli/metrics.jsonl` へ永続化
+  - Done: `stats --days N` で時系列集計を表示
 - Cross-cutting: Done
   - Config: `chat.profile_enabled`, `chat.profile_path`, `chat.summary_every`, `chat.max_unknowns_before_confirm`, `chat.empathy_style` を追加
   - Tests: `internal/profile` と `internal/chat` に追加テストを実装

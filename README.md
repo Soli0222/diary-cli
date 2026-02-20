@@ -83,6 +83,10 @@ diary-cli summary
 diary-cli summary --yesterday
 diary-cli summary --date 2026-02-14
 
+# 対話メトリクスを確認（直近7日）
+diary-cli stats
+diary-cli stats --days 14
+
 # 生成済みファイルをgit commit & push
 diary-cli push
 diary-cli push --yesterday
@@ -98,6 +102,9 @@ diary-cli push --date 2026-02-14
 3. **締め**（1〜2問）: 一日の総括
 
 対話中に `/done` を入力すると終了します（最低3問は回答が必要）。
+
+`run` 完了後には、質問数・要約確認・確認成功率・平均回答文字数などのメトリクスが表示されます。
+履歴は `~/.config/diary-cli/metrics.jsonl` に保存され、`stats` コマンドで時系列集計を確認できます。
 
 ## 出力形式
 
