@@ -14,6 +14,22 @@ type Options struct {
 	SummaryEvery             int
 	MaxUnknownsBeforeConfirm int
 	EmpathyStyle             string
+	PendingHypotheses        []PendingHypothesis
+}
+
+type PendingHypothesis struct {
+	Category string
+	Value    string
+}
+
+type ConfirmationOutcome struct {
+	QuestionNum int
+	Category    string
+	Value       string
+	Question    string
+	Answer      string
+	Confirmed   bool
+	Denied      bool
 }
 
 func buildSystemPromptNormal(p1Count, p2Count, p3Count int, notes, profileSummary string) string {
@@ -116,6 +132,9 @@ type Session struct {
 	maxUnknownsBeforeConfirm int
 	empathyStyle             string
 	state                    TurnState
+	pendingHypotheses        []PendingHypothesis
+	activeConfirmation       *PendingHypothesis
+	confirmationOutcomes     []ConfirmationOutcome
 }
 
 // phaseBoundaries computes phase transition points based on maxQuestions.
@@ -192,6 +211,7 @@ func NewSessionWithOptions(client *claude.Client, formattedNotes string, noteCou
 		summaryEvery:             opts.SummaryEvery,
 		maxUnknownsBeforeConfirm: opts.MaxUnknownsBeforeConfirm,
 		empathyStyle:             opts.EmpathyStyle,
+		pendingHypotheses:        append([]PendingHypothesis(nil), opts.PendingHypotheses...),
 	}
 }
 
@@ -234,6 +254,7 @@ func (s *Session) Run() ([]claude.Message, error) {
 		}
 
 		s.state.UpdateFromAnswer(answer)
+		s.recordConfirmationOutcome(question, answer)
 
 		// Add assistant question and user answer to history
 		s.messages = append(s.messages,
@@ -280,6 +301,13 @@ func (s *Session) shouldConfirmUnknowns() bool {
 
 func (s *Session) getInteractionHint() string {
 	var hints []string
+	target := s.pickPendingHypothesis()
+	if target != nil {
+		s.activeConfirmation = target
+		hints = append(hints, pendingConfirmationHint(*target))
+	} else {
+		s.activeConfirmation = nil
+	}
 	if s.shouldSummaryCheck() {
 		hints = append(hints, summaryCheckHint())
 	}
@@ -288,6 +316,78 @@ func (s *Session) getInteractionHint() string {
 	}
 	hints = append(hints, empathyHint(s.empathyStyle))
 	return strings.Join(hints, " ")
+}
+
+func (s *Session) pickPendingHypothesis() *PendingHypothesis {
+	if len(s.pendingHypotheses) == 0 {
+		return nil
+	}
+	if !s.shouldSummaryCheck() && !s.shouldConfirmUnknowns() {
+		return nil
+	}
+
+	target := s.pendingHypotheses[0]
+	return &target
+}
+
+func (s *Session) recordConfirmationOutcome(question, answer string) {
+	if s.activeConfirmation == nil {
+		return
+	}
+
+	confirmed, denied := classifyConfirmationAnswer(answer)
+	s.confirmationOutcomes = append(s.confirmationOutcomes, ConfirmationOutcome{
+		QuestionNum: s.questionNum,
+		Category:    s.activeConfirmation.Category,
+		Value:       s.activeConfirmation.Value,
+		Question:    question,
+		Answer:      answer,
+		Confirmed:   confirmed,
+		Denied:      denied,
+	})
+
+	if confirmed || denied {
+		s.removePendingHypothesis(*s.activeConfirmation)
+	}
+	s.activeConfirmation = nil
+}
+
+func classifyConfirmationAnswer(answer string) (confirmed bool, denied bool) {
+	a := strings.TrimSpace(strings.ToLower(answer))
+	if a == "" {
+		return false, false
+	}
+
+	negativeTokens := []string{"いいえ", "違う", "ちがう", "違います", "not", "no", "そんなことない"}
+	for _, token := range negativeTokens {
+		if strings.Contains(a, token) {
+			return false, true
+		}
+	}
+
+	positiveTokens := []string{"はい", "そうです", "その通り", "あってます", "合ってます", "yes", "yep"}
+	for _, token := range positiveTokens {
+		if strings.Contains(a, token) {
+			return true, false
+		}
+	}
+
+	return false, false
+}
+
+func (s *Session) removePendingHypothesis(target PendingHypothesis) {
+	if len(s.pendingHypotheses) == 0 {
+		return
+	}
+	dst := s.pendingHypotheses[:0]
+	for _, h := range s.pendingHypotheses {
+		if strings.EqualFold(strings.TrimSpace(h.Category), strings.TrimSpace(target.Category)) &&
+			strings.EqualFold(strings.TrimSpace(h.Value), strings.TrimSpace(target.Value)) {
+			continue
+		}
+		dst = append(dst, h)
+	}
+	s.pendingHypotheses = dst
 }
 
 func (s *Session) nextQuestion() (string, error) {
@@ -321,4 +421,10 @@ func (s *Session) nextQuestion() (string, error) {
 // GetMessages returns the conversation messages.
 func (s *Session) GetMessages() []claude.Message {
 	return s.messages
+}
+
+func (s *Session) GetConfirmationOutcomes() []ConfirmationOutcome {
+	out := make([]ConfirmationOutcome, len(s.confirmationOutcomes))
+	copy(out, s.confirmationOutcomes)
+	return out
 }

@@ -75,6 +75,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 			SummaryEvery:             cfg.Chat.SummaryEvery,
 			MaxUnknownsBeforeConfirm: cfg.Chat.MaxUnknownsBeforeConfirm,
 			EmpathyStyle:             cfg.Chat.EmpathyStyle,
+			PendingHypotheses:        toPendingHypotheses(prof.PendingConfirmations, 5),
 		},
 	)
 
@@ -84,7 +85,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 	}
 
 	if cfg.Chat.ProfileEnabled {
-		if err := updateUserProfile(claudeClient, prof, profilePath, conversation, date); err != nil {
+		if err := updateUserProfile(claudeClient, prof, profilePath, conversation, session.GetConfirmationOutcomes(), date); err != nil {
 			fmt.Fprintf(os.Stderr, "⚠️  プロファイル更新をスキップしました: %v\n", err)
 		}
 	}
@@ -157,17 +158,54 @@ func loadUserProfile(cfg *config.Config) (*profile.UserProfile, string) {
 	return prof, path
 }
 
-func updateUserProfile(client *claude.Client, current *profile.UserProfile, path string, conversation []claude.Message, date time.Time) error {
+func updateUserProfile(client *claude.Client, current *profile.UserProfile, path string, conversation []claude.Message, outcomes []chat.ConfirmationOutcome, date time.Time) error {
 	updates, err := profile.ExtractUpdates(client, conversation, date, current)
 	if err != nil {
 		return fmt.Errorf("learning extraction failed: %w", err)
 	}
 
 	merged := profile.Merge(current, updates, date)
+	merged = profile.ApplyConfirmations(merged, toProfileOutcomes(outcomes), date)
 	if err := profile.Save(path, merged); err != nil {
 		return fmt.Errorf("profile save failed: %w", err)
 	}
 	return nil
+}
+
+func toPendingHypotheses(items []profile.PendingConfirmation, limit int) []chat.PendingHypothesis {
+	if len(items) == 0 || limit <= 0 {
+		return nil
+	}
+	if len(items) < limit {
+		limit = len(items)
+	}
+	out := make([]chat.PendingHypothesis, 0, limit)
+	for i := 0; i < limit; i++ {
+		out = append(out, chat.PendingHypothesis{
+			Category: items[i].Category,
+			Value:    items[i].Value,
+		})
+	}
+	return out
+}
+
+func toProfileOutcomes(items []chat.ConfirmationOutcome) []profile.ConfirmationOutcome {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]profile.ConfirmationOutcome, 0, len(items))
+	for _, item := range items {
+		out = append(out, profile.ConfirmationOutcome{
+			QuestionNum: item.QuestionNum,
+			Category:    item.Category,
+			Value:       item.Value,
+			Question:    item.Question,
+			Answer:      item.Answer,
+			Confirmed:   item.Confirmed,
+			Denied:      item.Denied,
+		})
+	}
+	return out
 }
 
 func fetchNotes(cfg *config.Config, date time.Time) ([]models.Note, error) {

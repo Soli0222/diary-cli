@@ -20,3 +20,7 @@ func summaryCheckHint() string {
 func unknownsHint(unknowns int) string {
 	return fmt.Sprintf("未確認点が多いため（%d件相当）、新規深掘りよりも確認質問を優先してください。", unknowns)
 }
+
+func pendingConfirmationHint(h PendingHypothesis) string {
+	return fmt.Sprintf("未確認の仮説があります。次の内容を1つだけ確認してください: [%s] %s。はい/いいえで答えやすい確認質問にしてください。", h.Category, h.Value)
+}

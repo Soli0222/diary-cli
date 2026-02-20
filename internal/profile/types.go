@@ -39,6 +39,7 @@ type UserProfile struct {
 	SensitiveTopics      []ProfileItem         `json:"sensitive_topics,omitempty"`
 	Conflicts            []ProfileConflict     `json:"conflicts,omitempty"`
 	PendingConfirmations []PendingConfirmation `json:"pending_confirmations,omitempty"`
+	ConfirmationHistory  []ConfirmationRecord  `json:"confirmation_history,omitempty"`
 }
 
 type ProfileConflict struct {
