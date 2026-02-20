@@ -7,10 +7,10 @@ In Progress
 - Phase A: Done
   - `internal/profile` の型・保存・読み込み・バージョン管理を実装
   - `run` へのプロファイル読み込み/保存配線を実装
-- Phase B: Partial
+- Phase B: Done
   - Done: `session` へのプロファイル要約注入、`summary_every` / `max_unknowns_before_confirm` / `empathy_style` を使った質問ヒント制御
   - Done: 未確認仮説をセッションへ渡し、確認質問ターンの結果（confirmed/denied）を記録
-  - Not Done: 「自然文出力」と「内部状態更新」を厳密に分離したターンスキーマ運用（現状はヒントベース）
+  - Done: 「自然文出力」と「内部状態更新」を分離するJSONターンスキーマ運用 + パース失敗時フォールバック
 - Phase C: Done
   - Done: 対話履歴からの更新候補抽出（Claude JSON）とマージ処理
   - Done: 矛盾候補を `conflicts` として永続化し、衝突値を本反映せず `pending_confirmations` に退避

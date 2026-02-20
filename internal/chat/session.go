@@ -30,6 +30,9 @@ type ConfirmationOutcome struct {
 	Answer      string
 	Confirmed   bool
 	Denied      bool
+	Uncertain   bool
+	Method      string
+	Reason      string
 }
 
 func buildSystemPromptNormal(p1Count, p2Count, p3Count int, notes, profileSummary string) string {
@@ -335,44 +338,88 @@ func (s *Session) recordConfirmationOutcome(question, answer string) {
 		return
 	}
 
-	confirmed, denied := classifyConfirmationAnswer(answer)
+	verdict := s.classifyConfirmation(question, answer, *s.activeConfirmation)
 	s.confirmationOutcomes = append(s.confirmationOutcomes, ConfirmationOutcome{
 		QuestionNum: s.questionNum,
 		Category:    s.activeConfirmation.Category,
 		Value:       s.activeConfirmation.Value,
 		Question:    question,
 		Answer:      answer,
-		Confirmed:   confirmed,
-		Denied:      denied,
+		Confirmed:   verdict.Confirmed,
+		Denied:      verdict.Denied,
+		Uncertain:   verdict.Uncertain,
+		Method:      verdict.Method,
+		Reason:      verdict.Reason,
 	})
 
-	if confirmed || denied {
+	if verdict.Confirmed || verdict.Denied {
 		s.removePendingHypothesis(*s.activeConfirmation)
 	}
 	s.activeConfirmation = nil
 }
 
-func classifyConfirmationAnswer(answer string) (confirmed bool, denied bool) {
+type confirmationVerdict struct {
+	Confirmed bool
+	Denied    bool
+	Uncertain bool
+	Method    string
+	Reason    string
+}
+
+func classifyConfirmationAnswer(answer string) confirmationVerdict {
 	a := strings.TrimSpace(strings.ToLower(answer))
 	if a == "" {
-		return false, false
+		return confirmationVerdict{Uncertain: true, Method: "rule", Reason: "empty answer"}
 	}
 
 	negativeTokens := []string{"いいえ", "違う", "ちがう", "違います", "not", "no", "そんなことない"}
 	for _, token := range negativeTokens {
 		if strings.Contains(a, token) {
-			return false, true
+			return confirmationVerdict{Denied: true, Method: "rule", Reason: "negative token matched: " + token}
 		}
 	}
 
 	positiveTokens := []string{"はい", "そうです", "その通り", "あってます", "合ってます", "yes", "yep"}
 	for _, token := range positiveTokens {
 		if strings.Contains(a, token) {
-			return true, false
+			return confirmationVerdict{Confirmed: true, Method: "rule", Reason: "positive token matched: " + token}
 		}
 	}
 
-	return false, false
+	return confirmationVerdict{Uncertain: true, Method: "rule", Reason: "no explicit signal"}
+}
+
+func (s *Session) classifyConfirmation(question, answer string, target PendingHypothesis) confirmationVerdict {
+	rule := classifyConfirmationAnswer(answer)
+	if rule.Confirmed || rule.Denied {
+		return rule
+	}
+	if s.client == nil {
+		return rule
+	}
+
+	judge, err := s.judgeConfirmationWithLLM(question, answer, target)
+	if err != nil {
+		return rule
+	}
+	return judge
+}
+
+func (s *Session) judgeConfirmationWithLLM(question, answer string, target PendingHypothesis) (confirmationVerdict, error) {
+	system := `あなたは確認回答の判定器です。JSONのみ返してください。
+出力:
+{"result":"confirmed|denied|uncertain","reason":"短い理由"}
+`
+	userPrompt := fmt.Sprintf("確認対象: [%s] %s\n質問: %s\n回答: %s", target.Category, target.Value, question, answer)
+	raw, err := s.client.Chat(system, []claude.Message{{Role: "user", Content: userPrompt}})
+	if err != nil {
+		return confirmationVerdict{}, err
+	}
+	resp, err := parseConfirmationJudgeResponse(raw)
+	if err != nil {
+		return confirmationVerdict{}, err
+	}
+	return resp, nil
 }
 
 func (s *Session) removePendingHypothesis(target PendingHypothesis) {
@@ -397,9 +444,9 @@ func (s *Session) nextQuestion() (string, error) {
 
 	if len(msgs) == 0 {
 		// First question
-		firstPrompt := "上記のノートを元に、最初の質問をしてください。フェーズ1（事実確認）から始めてください。"
+		firstPrompt := "上記のノートを元に、最初の質問をしてください。フェーズ1（事実確認）から始めてください。\n" + turnSchemaInstruction()
 		if s.fewNotes {
-			firstPrompt = "上記のノートを元に、最初の質問をしてください。フェーズ1（概要把握）から始めてください。"
+			firstPrompt = "上記のノートを元に、最初の質問をしてください。フェーズ1（概要把握）から始めてください。\n" + turnSchemaInstruction()
 		}
 		msgs = append(msgs, claude.Message{
 			Role:    "user",
@@ -411,11 +458,19 @@ func (s *Session) nextQuestion() (string, error) {
 		interactionHint := s.getInteractionHint()
 		msgs = append(msgs, claude.Message{
 			Role:    "user",
-			Content: fmt.Sprintf("次の質問をしてください。%s %s（%d問目/%d問中）", phaseHint, interactionHint, s.questionNum+1, s.maxQuestions),
+			Content: fmt.Sprintf("次の質問をしてください。%s %s（%d問目/%d問中）\n%s", phaseHint, interactionHint, s.questionNum+1, s.maxQuestions, turnSchemaInstruction()),
 		})
 	}
 
-	return s.client.Chat(s.systemPrompt, msgs)
+	raw, err := s.client.Chat(s.systemPrompt, msgs)
+	if err != nil {
+		return "", err
+	}
+	turn, err := parseTurnResponse(raw)
+	if err == nil {
+		return turn.Question, nil
+	}
+	return fallbackQuestion(raw), nil
 }
 
 // GetMessages returns the conversation messages.

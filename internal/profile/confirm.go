@@ -14,12 +14,17 @@ type ConfirmationOutcome struct {
 	Answer      string
 	Confirmed   bool
 	Denied      bool
+	Uncertain   bool
+	Method      string
+	Reason      string
 }
 
 type ConfirmationRecord struct {
 	Category   string `json:"category"`
 	Value      string `json:"value"`
 	Result     string `json:"result"`
+	Method     string `json:"method,omitempty"`
+	Reason     string `json:"reason,omitempty"`
 	Question   string `json:"question,omitempty"`
 	Answer     string `json:"answer,omitempty"`
 	RecordedAt string `json:"recorded_at,omitempty"`
@@ -49,6 +54,8 @@ func ApplyConfirmations(base *UserProfile, outcomes []ConfirmationOutcome, date 
 				Category:   category,
 				Value:      value,
 				Result:     "denied",
+				Method:     out.Method,
+				Reason:     out.Reason,
 				Question:   out.Question,
 				Answer:     out.Answer,
 				RecordedAt: nowRFC3339(),
@@ -74,6 +81,8 @@ func ApplyConfirmations(base *UserProfile, outcomes []ConfirmationOutcome, date 
 				Category:   category,
 				Value:      value,
 				Result:     "partial_confirmed",
+				Method:     out.Method,
+				Reason:     out.Reason,
 				Question:   out.Question,
 				Answer:     out.Answer,
 				RecordedAt: nowRFC3339(),
@@ -94,6 +103,8 @@ func ApplyConfirmations(base *UserProfile, outcomes []ConfirmationOutcome, date 
 			Category:   category,
 			Value:      value,
 			Result:     "confirmed",
+			Method:     out.Method,
+			Reason:     out.Reason,
 			Question:   out.Question,
 			Answer:     out.Answer,
 			RecordedAt: nowRFC3339(),

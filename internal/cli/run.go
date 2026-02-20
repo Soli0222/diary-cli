@@ -203,6 +203,9 @@ func toProfileOutcomes(items []chat.ConfirmationOutcome) []profile.ConfirmationO
 			Answer:      item.Answer,
 			Confirmed:   item.Confirmed,
 			Denied:      item.Denied,
+			Uncertain:   item.Uncertain,
+			Method:      item.Method,
+			Reason:      item.Reason,
 		})
 	}
 	return out
