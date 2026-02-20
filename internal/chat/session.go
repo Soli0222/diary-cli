@@ -18,7 +18,7 @@ type Options struct {
 
 func buildSystemPromptNormal(p1Count, p2Count, p3Count int, notes, profileSummary string) string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf(`あなたはユーザーの日記作成を手伝うインタビュアーです。
+	fmt.Fprintf(&sb, `あなたはユーザーの日記作成を手伝うインタビュアーです。
 ユーザーのMisskeyノート（SNS投稿）を元に、その日の出来事について質問し、言語化を促してください。
 
 ## ルール
@@ -43,7 +43,7 @@ func buildSystemPromptNormal(p1Count, p2Count, p3Count int, notes, profileSummar
 例: 「今日一日を振り返って、一番印象に残ったことは？」
 
 ## ユーザーのノート
-%s`, p1Count, p2Count, p3Count, notes))
+%s`, p1Count, p2Count, p3Count, notes)
 
 	if profileSummary != "" {
 		sb.WriteString("\n\n## ユーザープロファイル（過去セッションからの学習）\n")
@@ -55,7 +55,7 @@ func buildSystemPromptNormal(p1Count, p2Count, p3Count int, notes, profileSummar
 
 func buildSystemPromptFewNotes(p1Count, p2Count, p3Count int, notes, profileSummary string) string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf(`あなたはユーザーの日記作成を手伝うインタビュアーです。
+	fmt.Fprintf(&sb, `あなたはユーザーの日記作成を手伝うインタビュアーです。
 今日はSNS投稿が少ない日です。ノートに書かれていない活動も積極的に引き出してください。
 
 ## ルール
@@ -89,7 +89,7 @@ func buildSystemPromptFewNotes(p1Count, p2Count, p3Count int, notes, profileSumm
 例: 「今日一日を振り返って、一番印象に残ったことは？」
 
 ## ユーザーのノート
-%s`, p1Count, p2Count, p3Count, notes))
+%s`, p1Count, p2Count, p3Count, notes)
 
 	if profileSummary != "" {
 		sb.WriteString("\n\n## ユーザープロファイル（過去セッションからの学習）\n")
