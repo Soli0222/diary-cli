@@ -18,6 +18,7 @@ import (
 	"github.com/soli0222/diary-cli/internal/misskey"
 	"github.com/soli0222/diary-cli/internal/models"
 	"github.com/soli0222/diary-cli/internal/preprocess"
+	"github.com/soli0222/diary-cli/internal/profile"
 )
 
 func newRunCmd() *cobra.Command {
@@ -61,11 +62,31 @@ func runRun(cmd *cobra.Command, args []string) error {
 
 	// 3. Interactive chat session
 	claudeClient := claude.NewClient(cfg.Claude.APIKey, cfg.Claude.Model)
-	session := chat.NewSession(claudeClient, formattedNotes, len(notes), cfg.Chat.MaxQuestions, cfg.Chat.MinQuestions)
+	prof, profilePath := loadUserProfile(cfg)
+
+	session := chat.NewSessionWithOptions(
+		claudeClient,
+		formattedNotes,
+		len(notes),
+		cfg.Chat.MaxQuestions,
+		cfg.Chat.MinQuestions,
+		chat.Options{
+			ProfileSummary:           profile.SummaryForPrompt(prof, 8),
+			SummaryEvery:             cfg.Chat.SummaryEvery,
+			MaxUnknownsBeforeConfirm: cfg.Chat.MaxUnknownsBeforeConfirm,
+			EmpathyStyle:             cfg.Chat.EmpathyStyle,
+		},
+	)
 
 	conversation, err := session.Run()
 	if err != nil {
 		return fmt.Errorf("chat session failed: %w", err)
+	}
+
+	if cfg.Chat.ProfileEnabled {
+		if err := updateUserProfile(claudeClient, prof, profilePath, conversation, date); err != nil {
+			fmt.Fprintf(os.Stderr, "⚠️  プロファイル更新をスキップしました: %v\n", err)
+		}
 	}
 
 	// 4. Generate diary
@@ -117,6 +138,35 @@ func runRun(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	return nil
+}
+
+func loadUserProfile(cfg *config.Config) (*profile.UserProfile, string) {
+	path := cfg.Chat.ProfilePath
+	if !cfg.Chat.ProfileEnabled {
+		return profile.NewEmpty(), path
+	}
+
+	prof, err := profile.Load(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "⚠️  プロファイル読み込みに失敗しました。空プロファイルで続行します: %v\n", err)
+	}
+	if prof == nil {
+		prof = profile.NewEmpty()
+	}
+	return prof, path
+}
+
+func updateUserProfile(client *claude.Client, current *profile.UserProfile, path string, conversation []claude.Message, date time.Time) error {
+	updates, err := profile.ExtractUpdates(client, conversation, date)
+	if err != nil {
+		return fmt.Errorf("learning extraction failed: %w", err)
+	}
+
+	merged := profile.Merge(current, updates, date)
+	if err := profile.Save(path, merged); err != nil {
+		return fmt.Errorf("profile save failed: %w", err)
+	}
 	return nil
 }
 

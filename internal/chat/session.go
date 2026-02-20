@@ -9,8 +9,16 @@ import (
 	"github.com/soli0222/diary-cli/internal/claude"
 )
 
-func buildSystemPromptNormal(p1Count, p2Count, p3Count int, notes string) string {
-	return fmt.Sprintf(`あなたはユーザーの日記作成を手伝うインタビュアーです。
+type Options struct {
+	ProfileSummary           string
+	SummaryEvery             int
+	MaxUnknownsBeforeConfirm int
+	EmpathyStyle             string
+}
+
+func buildSystemPromptNormal(p1Count, p2Count, p3Count int, notes, profileSummary string) string {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf(`あなたはユーザーの日記作成を手伝うインタビュアーです。
 ユーザーのMisskeyノート（SNS投稿）を元に、その日の出来事について質問し、言語化を促してください。
 
 ## ルール
@@ -35,11 +43,19 @@ func buildSystemPromptNormal(p1Count, p2Count, p3Count int, notes string) string
 例: 「今日一日を振り返って、一番印象に残ったことは？」
 
 ## ユーザーのノート
-%s`, p1Count, p2Count, p3Count, notes)
+%s`, p1Count, p2Count, p3Count, notes))
+
+	if profileSummary != "" {
+		sb.WriteString("\n\n## ユーザープロファイル（過去セッションからの学習）\n")
+		sb.WriteString(profileSummary)
+	}
+
+	return sb.String()
 }
 
-func buildSystemPromptFewNotes(p1Count, p2Count, p3Count int, notes string) string {
-	return fmt.Sprintf(`あなたはユーザーの日記作成を手伝うインタビュアーです。
+func buildSystemPromptFewNotes(p1Count, p2Count, p3Count int, notes, profileSummary string) string {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf(`あなたはユーザーの日記作成を手伝うインタビュアーです。
 今日はSNS投稿が少ない日です。ノートに書かれていない活動も積極的に引き出してください。
 
 ## ルール
@@ -73,22 +89,33 @@ func buildSystemPromptFewNotes(p1Count, p2Count, p3Count int, notes string) stri
 例: 「今日一日を振り返って、一番印象に残ったことは？」
 
 ## ユーザーのノート
-%s`, p1Count, p2Count, p3Count, notes)
+%s`, p1Count, p2Count, p3Count, notes))
+
+	if profileSummary != "" {
+		sb.WriteString("\n\n## ユーザープロファイル（過去セッションからの学習）\n")
+		sb.WriteString(profileSummary)
+	}
+
+	return sb.String()
 }
 
 const fewNotesThreshold = 10
 
 // Session manages an interactive chat session.
 type Session struct {
-	client       *claude.Client
-	messages     []claude.Message
-	systemPrompt string
-	maxQuestions int
-	minQuestions int
-	questionNum  int
-	fewNotes     bool
-	phase1End    int // questions [0, phase1End) are phase 1
-	phase2End    int // questions [phase1End, phase2End) are phase 2
+	client                   *claude.Client
+	messages                 []claude.Message
+	systemPrompt             string
+	maxQuestions             int
+	minQuestions             int
+	questionNum              int
+	fewNotes                 bool
+	phase1End                int // questions [0, phase1End) are phase 1
+	phase2End                int // questions [phase1End, phase2End) are phase 2
+	summaryEvery             int
+	maxUnknownsBeforeConfirm int
+	empathyStyle             string
+	state                    TurnState
 }
 
 // phaseBoundaries computes phase transition points based on maxQuestions.
@@ -126,6 +153,11 @@ func phaseBoundaries(maxQ int, fewNotes bool) (int, int) {
 
 // NewSession creates a new chat session with the given notes context.
 func NewSession(client *claude.Client, formattedNotes string, noteCount, maxQ, minQ int) *Session {
+	return NewSessionWithOptions(client, formattedNotes, noteCount, maxQ, minQ, Options{})
+}
+
+// NewSessionWithOptions creates a new session with profile-aware behavior.
+func NewSessionWithOptions(client *claude.Client, formattedNotes string, noteCount, maxQ, minQ int, opts Options) *Session {
 	fewNotes := noteCount < fewNotesThreshold
 	p1End, p2End := phaseBoundaries(maxQ, fewNotes)
 	p1Count := p1End
@@ -134,19 +166,32 @@ func NewSession(client *claude.Client, formattedNotes string, noteCount, maxQ, m
 
 	var prompt string
 	if fewNotes {
-		prompt = buildSystemPromptFewNotes(p1Count, p2Count, p3Count, formattedNotes)
+		prompt = buildSystemPromptFewNotes(p1Count, p2Count, p3Count, formattedNotes, opts.ProfileSummary)
 	} else {
-		prompt = buildSystemPromptNormal(p1Count, p2Count, p3Count, formattedNotes)
+		prompt = buildSystemPromptNormal(p1Count, p2Count, p3Count, formattedNotes, opts.ProfileSummary)
+	}
+
+	if opts.SummaryEvery <= 0 {
+		opts.SummaryEvery = 2
+	}
+	if opts.MaxUnknownsBeforeConfirm <= 0 {
+		opts.MaxUnknownsBeforeConfirm = 3
+	}
+	if opts.EmpathyStyle == "" {
+		opts.EmpathyStyle = "balanced"
 	}
 
 	return &Session{
-		client:       client,
-		systemPrompt: prompt,
-		maxQuestions: maxQ,
-		minQuestions: minQ,
-		fewNotes:     fewNotes,
-		phase1End:    p1End,
-		phase2End:    p2End,
+		client:                   client,
+		systemPrompt:             prompt,
+		maxQuestions:             maxQ,
+		minQuestions:             minQ,
+		fewNotes:                 fewNotes,
+		phase1End:                p1End,
+		phase2End:                p2End,
+		summaryEvery:             opts.SummaryEvery,
+		maxUnknownsBeforeConfirm: opts.MaxUnknownsBeforeConfirm,
+		empathyStyle:             opts.EmpathyStyle,
 	}
 }
 
@@ -188,6 +233,8 @@ func (s *Session) Run() ([]claude.Message, error) {
 			}
 		}
 
+		s.state.UpdateFromAnswer(answer)
+
 		// Add assistant question and user answer to history
 		s.messages = append(s.messages,
 			claude.Message{Role: "assistant", Content: question},
@@ -223,6 +270,26 @@ func (s *Session) getPhaseHint() string {
 	}
 }
 
+func (s *Session) shouldSummaryCheck() bool {
+	return s.summaryEvery > 0 && s.questionNum > 0 && s.questionNum%s.summaryEvery == 0
+}
+
+func (s *Session) shouldConfirmUnknowns() bool {
+	return s.maxUnknownsBeforeConfirm > 0 && s.state.Unknowns >= s.maxUnknownsBeforeConfirm
+}
+
+func (s *Session) getInteractionHint() string {
+	var hints []string
+	if s.shouldSummaryCheck() {
+		hints = append(hints, summaryCheckHint())
+	}
+	if s.shouldConfirmUnknowns() {
+		hints = append(hints, unknownsHint(s.state.Unknowns))
+	}
+	hints = append(hints, empathyHint(s.empathyStyle))
+	return strings.Join(hints, " ")
+}
+
 func (s *Session) nextQuestion() (string, error) {
 	// Build prompt for getting next question
 	msgs := make([]claude.Message, len(s.messages))
@@ -241,9 +308,10 @@ func (s *Session) nextQuestion() (string, error) {
 	} else {
 		// Add instruction for next question
 		phaseHint := s.getPhaseHint()
+		interactionHint := s.getInteractionHint()
 		msgs = append(msgs, claude.Message{
 			Role:    "user",
-			Content: fmt.Sprintf("次の質問をしてください。%s（%d問目/%d問中）", phaseHint, s.questionNum+1, s.maxQuestions),
+			Content: fmt.Sprintf("次の質問をしてください。%s %s（%d問目/%d問中）", phaseHint, interactionHint, s.questionNum+1, s.maxQuestions),
 		})
 	}
 
