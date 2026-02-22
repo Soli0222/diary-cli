@@ -44,19 +44,30 @@ func Execute() {
 
 // resolveDate determines the target date from flags.
 func resolveDate() (time.Time, error) {
-	now := time.Now()
+	return resolveTargetDate(time.Now(), flagDate, flagYesterday)
+}
 
-	if flagDate != "" {
-		t, err := time.ParseInLocation("2006-01-02", flagDate, now.Location())
+func resolveTargetDate(now time.Time, dateFlag string, yesterdayFlag bool) (time.Time, error) {
+	loc := now.Location()
+
+	if dateFlag != "" {
+		t, err := time.ParseInLocation("2006-01-02", dateFlag, loc)
 		if err != nil {
 			return time.Time{}, fmt.Errorf("invalid date format (expected YYYY-MM-DD): %w", err)
 		}
-		return t, nil
+		return normalizeToLocalMidnight(t, loc), nil
 	}
 
-	if flagYesterday {
-		return now.AddDate(0, 0, -1), nil
+	if yesterdayFlag {
+		return normalizeToLocalMidnight(now.AddDate(0, 0, -1), loc), nil
 	}
 
-	return now, nil
+	return normalizeToLocalMidnight(now, loc), nil
+}
+
+func normalizeToLocalMidnight(t time.Time, loc *time.Location) time.Time {
+	if loc == nil {
+		loc = t.Location()
+	}
+	return time.Date(t.In(loc).Year(), t.In(loc).Month(), t.In(loc).Day(), 0, 0, 0, 0, loc)
 }
