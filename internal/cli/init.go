@@ -64,6 +64,11 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Println("\n--- 対話設定 ---")
 	maxQ := prompt(scanner, "最大質問数", "8")
 	minQ := prompt(scanner, "最低質問数", "3")
+	summaryEvery := prompt(scanner, "要約確認の間隔（何ターンごと）", "2")
+	maxUnknowns := prompt(scanner, "確認優先に切り替える未確認点の閾値", "3")
+	empathyStyle := prompt(scanner, "共感スタイル（light/balanced/deep）", "balanced")
+	profileEnabled := prompt(scanner, "プロファイル学習を有効化", "true")
+	profilePath := prompt(scanner, "プロファイル保存先（空でデフォルト）", "")
 
 	// Summaly settings
 	fmt.Println("\n--- Summaly設定（任意） ---")
@@ -90,11 +95,16 @@ diary:
 chat:
   max_questions: %s
   min_questions: %s
+  summary_every: %s
+  max_unknowns_before_confirm: %s
+  empathy_style: "%s"
+  profile_enabled: %s
+  profile_path: "%s"
 
 # Summaly設定（任意）
 summaly:
   endpoint: "%s"
-`, instanceURL, token, apiKey, model, outputDir, author, editor, maxQ, minQ, summalyEndpoint)
+`, instanceURL, token, apiKey, model, outputDir, author, editor, maxQ, minQ, summaryEvery, maxUnknowns, empathyStyle, profileEnabled, profilePath, summalyEndpoint)
 
 	// Create directory and write file
 	if err := os.MkdirAll(configDir, 0755); err != nil {

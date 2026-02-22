@@ -15,9 +15,11 @@ import (
 	"github.com/soli0222/diary-cli/internal/claude"
 	"github.com/soli0222/diary-cli/internal/config"
 	"github.com/soli0222/diary-cli/internal/generator"
+	"github.com/soli0222/diary-cli/internal/metrics"
 	"github.com/soli0222/diary-cli/internal/misskey"
 	"github.com/soli0222/diary-cli/internal/models"
 	"github.com/soli0222/diary-cli/internal/preprocess"
+	"github.com/soli0222/diary-cli/internal/profile"
 )
 
 func newRunCmd() *cobra.Command {
@@ -61,11 +63,39 @@ func runRun(cmd *cobra.Command, args []string) error {
 
 	// 3. Interactive chat session
 	claudeClient := claude.NewClient(cfg.Claude.APIKey, cfg.Claude.Model)
-	session := chat.NewSession(claudeClient, formattedNotes, len(notes), cfg.Chat.MaxQuestions, cfg.Chat.MinQuestions)
+	prof, profilePath := loadUserProfile(cfg)
+	beforeStable := len(prof.StableFacts)
+	beforePending := len(prof.PendingConfirmations)
+	beforeConflicts := len(prof.Conflicts)
+
+	session := chat.NewSessionWithOptions(
+		claudeClient,
+		formattedNotes,
+		len(notes),
+		cfg.Chat.MaxQuestions,
+		cfg.Chat.MinQuestions,
+		chat.Options{
+			ProfileSummary:           profile.SummaryForPrompt(prof, 8),
+			SummaryEvery:             cfg.Chat.SummaryEvery,
+			MaxUnknownsBeforeConfirm: cfg.Chat.MaxUnknownsBeforeConfirm,
+			EmpathyStyle:             cfg.Chat.EmpathyStyle,
+			PendingHypotheses:        toPendingHypotheses(prof.PendingConfirmations, 5),
+		},
+	)
 
 	conversation, err := session.Run()
 	if err != nil {
 		return fmt.Errorf("chat session failed: %w", err)
+	}
+	sessionMetrics := session.GetMetrics()
+
+	updatedProf := prof
+	if cfg.Chat.ProfileEnabled {
+		updatedProf, err = updateUserProfile(claudeClient, prof, profilePath, conversation, session.GetConfirmationOutcomes(), date)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "⚠️  プロファイル更新をスキップしました: %v\n", err)
+			updatedProf = prof
+		}
 	}
 
 	// 4. Generate diary
@@ -100,6 +130,16 @@ func runRun(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	fmt.Printf("✅ 日記を保存しました: %s\n", outputPath)
+	recordAndPrintRunMetrics(
+		date,
+		sessionMetrics,
+		beforeStable,
+		len(updatedProf.StableFacts),
+		beforePending,
+		len(updatedProf.PendingConfirmations),
+		beforeConflicts,
+		len(updatedProf.Conflicts),
+	)
 
 	// 8. Open in editor
 	fmt.Print("エディタで開きますか？ (y/N) ")
@@ -118,6 +158,109 @@ func runRun(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+func loadUserProfile(cfg *config.Config) (*profile.UserProfile, string) {
+	path := cfg.Chat.ProfilePath
+	if !cfg.Chat.ProfileEnabled {
+		return profile.NewEmpty(), path
+	}
+
+	prof, err := profile.Load(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "⚠️  プロファイル読み込みに失敗しました。空プロファイルで続行します: %v\n", err)
+	}
+	if prof == nil {
+		prof = profile.NewEmpty()
+	}
+	return prof, path
+}
+
+func updateUserProfile(client *claude.Client, current *profile.UserProfile, path string, conversation []claude.Message, outcomes []chat.ConfirmationOutcome, date time.Time) (*profile.UserProfile, error) {
+	updates, err := profile.ExtractUpdates(client, conversation, date, current)
+	if err != nil {
+		return current, fmt.Errorf("learning extraction failed: %w", err)
+	}
+
+	merged := profile.Merge(current, updates, date)
+	merged = profile.ApplyConfirmations(merged, toProfileOutcomes(outcomes), date)
+	if err := profile.Save(path, merged); err != nil {
+		return current, fmt.Errorf("profile save failed: %w", err)
+	}
+	return merged, nil
+}
+
+func toPendingHypotheses(items []profile.PendingConfirmation, limit int) []chat.PendingHypothesis {
+	if len(items) == 0 || limit <= 0 {
+		return nil
+	}
+	if len(items) < limit {
+		limit = len(items)
+	}
+	out := make([]chat.PendingHypothesis, 0, limit)
+	for i := 0; i < limit; i++ {
+		out = append(out, chat.PendingHypothesis{
+			Category: items[i].Category,
+			Value:    items[i].Value,
+		})
+	}
+	return out
+}
+
+func toProfileOutcomes(items []chat.ConfirmationOutcome) []profile.ConfirmationOutcome {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]profile.ConfirmationOutcome, 0, len(items))
+	for _, item := range items {
+		out = append(out, profile.ConfirmationOutcome{
+			QuestionNum: item.QuestionNum,
+			Category:    item.Category,
+			Value:       item.Value,
+			Question:    item.Question,
+			Answer:      item.Answer,
+			Confirmed:   item.Confirmed,
+			Denied:      item.Denied,
+			Uncertain:   item.Uncertain,
+			Method:      item.Method,
+			Reason:      item.Reason,
+		})
+	}
+	return out
+}
+
+func recordAndPrintRunMetrics(date time.Time, m chat.Metrics, beforeStable, afterStable, beforePending, afterPending, beforeConflicts, afterConflicts int) {
+	item := metrics.RunMetrics{
+		Date:                  date.Format("2006-01-02"),
+		QuestionsTotal:        m.QuestionsTotal,
+		SummaryCheckTurns:     m.SummaryCheckTurns,
+		StructuredTurns:       m.StructuredTurns,
+		FallbackTurns:         m.FallbackTurns,
+		ConfirmationAttempts:  m.ConfirmationAttempts,
+		ConfirmationConfirmed: m.ConfirmationConfirmed,
+		ConfirmationDenied:    m.ConfirmationDenied,
+		ConfirmationUncertain: m.ConfirmationUncertain,
+		AvgAnswerLength:       m.AvgAnswerLength,
+		DuplicateQuestionRate: m.DuplicateQuestionRate,
+		StableFactsBefore:     beforeStable,
+		StableFactsAfter:      afterStable,
+		PendingBefore:         beforePending,
+		PendingAfter:          afterPending,
+		ConflictsBefore:       beforeConflicts,
+		ConflictsAfter:        afterConflicts,
+	}
+
+	if err := metrics.Append("", item); err != nil {
+		fmt.Fprintf(os.Stderr, "⚠️  実行メトリクスの保存に失敗しました: %v\n", err)
+	}
+
+	fmt.Println("\n--- Interview Metrics ---")
+	fmt.Printf("質問数: %d（要約確認 %d）\n", m.QuestionsTotal, m.SummaryCheckTurns)
+	fmt.Printf("構造化ターン: %d / フォールバック: %d\n", m.StructuredTurns, m.FallbackTurns)
+	fmt.Printf("確認結果: 試行 %d / 確定 %d / 否定 %d / 不確実 %d\n", m.ConfirmationAttempts, m.ConfirmationConfirmed, m.ConfirmationDenied, m.ConfirmationUncertain)
+	fmt.Printf("平均回答文字数: %.1f\n", m.AvgAnswerLength)
+	fmt.Printf("重複質問率: %.1f%%\n", m.DuplicateQuestionRate*100)
+	fmt.Printf("プロファイル変化: stable %d→%d, pending %d→%d, conflicts %d→%d\n", beforeStable, afterStable, beforePending, afterPending, beforeConflicts, afterConflicts)
 }
 
 func fetchNotes(cfg *config.Config, date time.Time) ([]models.Note, error) {

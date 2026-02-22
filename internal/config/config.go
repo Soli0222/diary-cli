@@ -33,8 +33,13 @@ type DiaryConfig struct {
 }
 
 type ChatConfig struct {
-	MaxQuestions int `mapstructure:"max_questions"`
-	MinQuestions int `mapstructure:"min_questions"`
+	MaxQuestions             int    `mapstructure:"max_questions"`
+	MinQuestions             int    `mapstructure:"min_questions"`
+	SummaryEvery             int    `mapstructure:"summary_every"`
+	MaxUnknownsBeforeConfirm int    `mapstructure:"max_unknowns_before_confirm"`
+	EmpathyStyle             string `mapstructure:"empathy_style"`
+	ProfileEnabled           bool   `mapstructure:"profile_enabled"`
+	ProfilePath              string `mapstructure:"profile_path"`
 }
 
 type SummalyConfig struct {
@@ -58,6 +63,11 @@ func Load() (*Config, error) {
 	viper.SetDefault("diary.editor", "")
 	viper.SetDefault("chat.max_questions", 8)
 	viper.SetDefault("chat.min_questions", 3)
+	viper.SetDefault("chat.summary_every", 2)
+	viper.SetDefault("chat.max_unknowns_before_confirm", 3)
+	viper.SetDefault("chat.empathy_style", "balanced")
+	viper.SetDefault("chat.profile_enabled", true)
+	viper.SetDefault("chat.profile_path", "")
 	viper.SetDefault("summaly.endpoint", "")
 
 	if err := viper.ReadInConfig(); err != nil {
