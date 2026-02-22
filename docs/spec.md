@@ -43,11 +43,15 @@ diary-cli version
 補足:
 - ルートの共通フラグは `--date` / `--yesterday`。
 - `stats` は `--days` で参照範囲を指定。
+- `--yesterday` は対象日を1日前にするためのフラグ（収集開始時刻の指定ではない）。
 
 ## 3. 実行フロー（run）
 
 1. 設定読み込み（`~/.config/diary-cli/config.yaml`）
-2. Misskey ノート取得（対象日）
+2. Misskey ノート取得
+   - `target_date`（日記の対象日）を決定
+   - `collection_window`（ノート収集時間レンジ）を決定
+   - `run` は `collection_window` に従って取得
 3. ノート前処理（グルーピング・整形、必要に応じ Summaly enrich）
 4. プロファイル読み込み（`profile_enabled=true` 時）
 5. 対話セッション実行
@@ -64,6 +68,23 @@ diary-cli version
 10. 任意でエディタ起動
 
 ノート件数が 0 件の場合は対話を開始せず終了する。
+
+### 3.1 日付と収集レンジ (`run`)
+
+`run` では、日記の対象日 (`target_date`) と Misskey ノート取得範囲 (`collection_window`) を分離して扱う。
+
+- `target_date`
+  - `--date YYYY-MM-DD`: 指定日（ローカルタイムゾーンの 00:00:00）
+  - `--yesterday`: 実行開始時刻の日付を `-1` 日した日（00:00:00）
+  - 指定なし: 実行開始時刻の当日（00:00:00）
+- `collection_window`
+  - `--date` 明示指定時: 対象日の1日分 (`[target_date, target_date+1day)`)
+  - `--date` 未指定かつ `chat.profile_enabled=true` かつ `profile.updated_at` が有効: `[profile.updated_at, execution_now)`
+  - 上記以外: 対象日の1日分取得にフォールバック
+
+補足:
+- `profile.updated_at` が不正/未来時刻/未設定の場合はフォールバックする
+- `summary` / `push` は引き続き日付ベースで動作し、`collection_window` 拡張は `run` のみ
 
 ## 4. 対話設計
 
@@ -103,6 +124,9 @@ diary-cli version
 
 - デフォルト: `~/.config/diary-cli/profile.json`
 - カスタム: `chat.profile_path`
+
+補足:
+- `updated_at` はプロファイル保存時刻（RFC3339）で、`run` のノート収集レンジ開始の近似アンカーとして利用される（`--date` 明示指定時を除く）
 
 ### 5.2 データ構造（主要）
 

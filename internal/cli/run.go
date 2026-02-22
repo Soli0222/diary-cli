@@ -36,16 +36,22 @@ func runRun(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	date, err := resolveDate()
+	executionNow := time.Now()
+	targetDate, err := resolveTargetDate(executionNow, flagDate, flagYesterday)
 	if err != nil {
 		return err
 	}
 
-	dateStr := date.Format("2006-01-02")
+	dateStr := targetDate.Format("2006-01-02")
 	fmt.Printf("📝 %s の日記を作成します\n", dateStr)
 
+	prof, profilePath := loadUserProfile(cfg)
+	beforeStable := len(prof.StableFacts)
+	beforePending := len(prof.PendingConfirmations)
+	beforeConflicts := len(prof.Conflicts)
+
 	// 1. Fetch notes
-	notes, err := fetchNotes(cfg, date)
+	notes, err := fetchNotesForRun(cfg, targetDate, executionNow, flagDate != "", prof)
 	if err != nil {
 		return err
 	}
@@ -63,10 +69,6 @@ func runRun(cmd *cobra.Command, args []string) error {
 
 	// 3. Interactive chat session
 	claudeClient := claude.NewClient(cfg.Claude.APIKey, cfg.Claude.Model)
-	prof, profilePath := loadUserProfile(cfg)
-	beforeStable := len(prof.StableFacts)
-	beforePending := len(prof.PendingConfirmations)
-	beforeConflicts := len(prof.Conflicts)
 
 	session := chat.NewSessionWithOptions(
 		claudeClient,
@@ -91,7 +93,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 
 	updatedProf := prof
 	if cfg.Chat.ProfileEnabled {
-		updatedProf, err = updateUserProfile(claudeClient, prof, profilePath, conversation, session.GetConfirmationOutcomes(), date)
+		updatedProf, err = updateUserProfile(claudeClient, prof, profilePath, conversation, session.GetConfirmationOutcomes(), targetDate)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "⚠️  プロファイル更新をスキップしました: %v\n", err)
 			updatedProf = prof
@@ -109,7 +111,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 
 	// 5. Generate summary
 	fmt.Println("📄 サマリーを生成中...")
-	summary, err := gen.GenerateSummary(preprocess.FormatAllNotes(notes), date)
+	summary, err := gen.GenerateSummary(preprocess.FormatAllNotes(notes), targetDate)
 	if err != nil {
 		return fmt.Errorf("summary generation failed: %w", err)
 	}
@@ -121,17 +123,16 @@ func runRun(cmd *cobra.Command, args []string) error {
 	}
 
 	// 7. Build and save markdown
-	now := time.Now()
-	diaryTime := time.Date(date.Year(), date.Month(), date.Day(), now.Hour(), now.Minute(), 0, 0, now.Location())
+	diaryTime := time.Date(targetDate.Year(), targetDate.Month(), targetDate.Day(), executionNow.Hour(), executionNow.Minute(), 0, 0, executionNow.Location())
 	markdown := generator.BuildMarkdown(diaryTime, cfg.Diary.Author, title, diaryBody, summary)
 
-	outputPath, err := saveDiary(cfg.Diary.OutputDir, date, markdown)
+	outputPath, err := saveDiary(cfg.Diary.OutputDir, targetDate, markdown)
 	if err != nil {
 		return err
 	}
 	fmt.Printf("✅ 日記を保存しました: %s\n", outputPath)
 	recordAndPrintRunMetrics(
-		date,
+		targetDate,
 		sessionMetrics,
 		beforeStable,
 		len(updatedProf.StableFacts),
@@ -158,6 +159,65 @@ func runRun(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+func resolveCollectionWindowForRun(now, targetDate time.Time, isExplicitDate bool, prof *profile.UserProfile) (start, end time.Time, ok bool, reason string) {
+	dayStart := time.Date(targetDate.Year(), targetDate.Month(), targetDate.Day(), 0, 0, 0, 0, targetDate.Location())
+	dayEnd := dayStart.Add(24 * time.Hour)
+
+	if isExplicitDate {
+		return dayStart, dayEnd, false, "explicit_date"
+	}
+	if prof == nil {
+		return dayStart, dayEnd, false, "nil_profile"
+	}
+	if prof.UpdatedAt == "" {
+		return dayStart, dayEnd, false, "empty_updated_at"
+	}
+
+	parsed, err := time.Parse(time.RFC3339, prof.UpdatedAt)
+	if err != nil {
+		return dayStart, dayEnd, false, "invalid_updated_at"
+	}
+	if !parsed.Before(now) {
+		return dayStart, dayEnd, false, "future_or_equal_updated_at"
+	}
+
+	return parsed, now, true, ""
+}
+
+func fetchNotesForRun(cfg *config.Config, targetDate, executionNow time.Time, isExplicitDate bool, prof *profile.UserProfile) ([]models.Note, error) {
+	client := misskey.NewClient(cfg.Misskey.InstanceURL, cfg.Misskey.Token)
+
+	me, err := client.GetMe()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user info: %w", err)
+	}
+
+	start, end, useProfileWindow, reason := resolveCollectionWindowForRun(executionNow, targetDate, isExplicitDate, prof)
+	if useProfileWindow {
+		fmt.Printf("🕒 ノート収集範囲: %s 〜 %s (profile.updated_at)\n", start.Format(time.RFC3339), end.Format(time.RFC3339))
+		notes, err := client.GetNotesForTimeRange(me.ID, start, end, false)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch notes: %w", err)
+		}
+		return notes, nil
+	}
+
+	switch reason {
+	case "explicit_date":
+		fmt.Println("🕒 ノート収集範囲: 対象日1日分 (--date 指定)")
+	case "nil_profile", "empty_updated_at":
+		// 初回実行や profile 無効時の通常系フォールバック。警告は出さない。
+	case "invalid_updated_at", "future_or_equal_updated_at":
+		fmt.Fprintf(os.Stderr, "⚠️  profile.updated_at を使えないため日単位取得にフォールバックします (%s)\n", reason)
+	}
+
+	notes, err := client.GetNotesForDay(me.ID, targetDate, false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch notes: %w", err)
+	}
+	return notes, nil
 }
 
 func loadUserProfile(cfg *config.Config) (*profile.UserProfile, string) {

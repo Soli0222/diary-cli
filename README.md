@@ -116,6 +116,12 @@ diary-cli stats --days 14
 
 対話中に `/done` で終了できます（`min_questions` 未満では終了不可）。
 
+日付/収集範囲の扱い:
+- `--yesterday` は「対象日を1日前にする」だけです（収集開始時刻を直接変えません）
+- `--date YYYY-MM-DD` 指定時は、指定日のノートを1日分取得します
+- `chat.profile_enabled=true` かつ `profile.json.updated_at` が有効な場合、`run` は `profile.updated_at` から実行開始時刻までのノートを取得します（`--date` 明示指定時を除く）
+- `profile.updated_at` が不正/未来時刻/未設定の場合は、従来どおり対象日の1日分取得にフォールバックします
+
 ## 学習プロファイル
 
 保存先:
