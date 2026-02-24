@@ -3,6 +3,8 @@ package chat
 import (
 	"strings"
 	"testing"
+
+	"github.com/soli0222/diary-cli/internal/claude"
 )
 
 func TestNewSessionWithOptions_IncludesProfileSummary(t *testing.T) {
@@ -23,6 +25,22 @@ func TestSession_ShouldSummaryCheck(t *testing.T) {
 	s := &Session{summaryEvery: 2, questionNum: 2}
 	if !s.shouldSummaryCheck() {
 		t.Fatalf("shouldSummaryCheck() = false, want true")
+	}
+}
+
+func TestSession_ShouldSummaryCheck_AvoidBackToBack(t *testing.T) {
+	t.Parallel()
+
+	s := &Session{
+		summaryEvery: 2,
+		questionNum:  2,
+		messages: []claude.Message{
+			{Role: "assistant", Content: "つまり、今日は仕事中心だったという理解で合っていますか？"},
+			{Role: "user", Content: "そうです"},
+		},
+	}
+	if s.shouldSummaryCheck() {
+		t.Fatalf("shouldSummaryCheck() = true, want false when previous assistant turn was a summary check")
 	}
 }
 

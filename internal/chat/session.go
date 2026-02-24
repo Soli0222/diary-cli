@@ -313,7 +313,10 @@ func (s *Session) getPhaseHint() string {
 }
 
 func (s *Session) shouldSummaryCheck() bool {
-	return s.summaryEvery > 0 && s.questionNum > 0 && s.questionNum%s.summaryEvery == 0
+	return s.summaryEvery > 0 &&
+		s.questionNum > 0 &&
+		s.questionNum%s.summaryEvery == 0 &&
+		!s.recentSummaryCheck()
 }
 
 func (s *Session) shouldConfirmUnknowns() bool {
@@ -335,8 +338,22 @@ func (s *Session) getInteractionHint() string {
 	if s.shouldConfirmUnknowns() {
 		hints = append(hints, unknownsHint(s.state.Unknowns))
 	}
+	hints = append(hints, questionQualityHint())
 	hints = append(hints, empathyHint(s.empathyStyle))
 	return strings.Join(hints, " ")
+}
+
+func (s *Session) recentSummaryCheck() bool {
+	for i := len(s.messages) - 1; i >= 0; i-- {
+		if s.messages[i].Role != "assistant" {
+			continue
+		}
+		q := s.messages[i].Content
+		return strings.Contains(q, "理解で合っていますか") ||
+			strings.Contains(q, "という理解で") ||
+			strings.Contains(q, "合っていますか")
+	}
+	return false
 }
 
 func (s *Session) pickPendingHypothesis() *PendingHypothesis {
