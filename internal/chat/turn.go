@@ -36,7 +36,7 @@ func empathyHint(style string) string {
 }
 
 func summaryCheckHint() string {
-	return "今回は要約確認を優先し、『つまり〜という理解で合っていますか？』形式の確認質問をしてください。"
+	return "今回は要約確認を優先してください。言い換え確認は短く自然に行い、同じ要約表現の反復は避けてください。"
 }
 
 func unknownsHint(unknowns int) string {
@@ -45,6 +45,10 @@ func unknownsHint(unknowns int) string {
 
 func pendingConfirmationHint(h PendingHypothesis) string {
 	return fmt.Sprintf("未確認の仮説があります。次の内容を1つだけ確認してください: [%s] %s。はい/いいえで答えやすい確認質問にしてください。", h.Category, h.Value)
+}
+
+func questionQualityHint() string {
+	return "ユーザーが言っていない前提（環境・役割・機材・属性など）を勝手に追加しないでください。推測が必要なら断定せず確認として聞いてください。答えにくい抽象質問（例: 位置づけ/意味づけだけを問う質問）を避け、具体的に何を答えればよいか分かる質問にしてください。ユーザーが『詳しく知らない』『直接関わっていない』と答えた話題は、その前提で受け止めて別の切り口へ移ってください。"
 }
 
 func turnSchemaInstruction() string {
@@ -62,7 +66,9 @@ func turnSchemaInstruction() string {
 制約:
 - question には1つの質問だけを書く
 - 日本語で書く
-- 前置きや解説は不要`
+- 前置きや解説は不要
+- ユーザー未提示の事実を断定前提にしない
+- 答えにくい抽象質問より、具体的な質問を優先する`
 }
 
 func parseTurnResponse(raw string) (turnResponse, error) {
