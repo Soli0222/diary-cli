@@ -9,8 +9,6 @@ import (
 	"github.com/soli0222/diary-cli/internal/models"
 )
 
-var jst = time.FixedZone("Asia/Tokyo", 9*60*60)
-
 // TimeGroup represents a group of notes in a time period.
 type TimeGroup struct {
 	Label string
@@ -18,7 +16,9 @@ type TimeGroup struct {
 }
 
 // GroupNotes sorts notes chronologically and groups them by time period.
-func GroupNotes(notes []models.Note) []TimeGroup {
+func GroupNotes(notes []models.Note, loc *time.Location) []TimeGroup {
+	loc = normalizeLocation(loc)
+
 	// Filter to original notes only (no pure renotes)
 	var filtered []models.Note
 	for _, n := range notes {
@@ -38,7 +38,7 @@ func GroupNotes(notes []models.Note) []TimeGroup {
 		"午前 (9:00-12:00)":  {},
 		"午後 (12:00-17:00)": {},
 		"夕方 (17:00-21:00)": {},
-		"夜 (21:00-5:00)":    {},
+		"夜 (21:00-5:00)":   {},
 	}
 	order := []string{
 		"早朝 (5:00-9:00)",
@@ -49,7 +49,7 @@ func GroupNotes(notes []models.Note) []TimeGroup {
 	}
 
 	for _, n := range filtered {
-		hour := n.CreatedAt.In(jst).Hour()
+		hour := n.CreatedAt.In(loc).Hour()
 		var label string
 		switch {
 		case hour >= 5 && hour < 9:
@@ -76,12 +76,14 @@ func GroupNotes(notes []models.Note) []TimeGroup {
 }
 
 // FormatGroupedNotes formats grouped notes into a human-readable string for Claude.
-func FormatGroupedNotes(groups []TimeGroup) string {
+func FormatGroupedNotes(groups []TimeGroup, loc *time.Location) string {
+	loc = normalizeLocation(loc)
+
 	var sb strings.Builder
 	for _, g := range groups {
 		fmt.Fprintf(&sb, "## %s\n", g.Label)
 		for _, n := range g.Notes {
-			ts := n.CreatedAt.In(jst).Format("15:04")
+			ts := n.CreatedAt.In(loc).Format("15:04")
 			text := n.GetDisplayText()
 			if text == "" {
 				continue
@@ -94,7 +96,9 @@ func FormatGroupedNotes(groups []TimeGroup) string {
 }
 
 // FormatAllNotes formats all notes (flat, chronological) for Claude.
-func FormatAllNotes(notes []models.Note) string {
+func FormatAllNotes(notes []models.Note, loc *time.Location) string {
+	loc = normalizeLocation(loc)
+
 	// Filter and sort
 	var filtered []models.Note
 	for _, n := range notes {
@@ -108,7 +112,7 @@ func FormatAllNotes(notes []models.Note) string {
 
 	var sb strings.Builder
 	for _, n := range filtered {
-		ts := n.CreatedAt.In(jst).Format("15:04")
+		ts := n.CreatedAt.In(loc).Format("15:04")
 		text := n.GetDisplayText()
 		if text == "" {
 			continue
@@ -116,4 +120,11 @@ func FormatAllNotes(notes []models.Note) string {
 		fmt.Fprintf(&sb, "- [%s] %s\n", ts, text)
 	}
 	return sb.String()
+}
+
+func normalizeLocation(loc *time.Location) *time.Location {
+	if loc != nil {
+		return loc
+	}
+	return time.FixedZone("Asia/Tokyo", 9*60*60)
 }

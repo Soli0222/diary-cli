@@ -6,7 +6,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/soli0222/diary-cli/internal/config"
 	"github.com/soli0222/diary-cli/internal/git"
 )
 
@@ -19,12 +18,17 @@ func newPushCmd() *cobra.Command {
 }
 
 func runPush(cmd *cobra.Command, args []string) error {
-	cfg, err := config.Load()
+	cfg, err := loadConfig()
 	if err != nil {
 		return err
 	}
 
-	date, err := resolveDate()
+	loc, err := cfg.DiaryLocation()
+	if err != nil {
+		return err
+	}
+
+	date, err := resolveDate(loc)
 	if err != nil {
 		return err
 	}

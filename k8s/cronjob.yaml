@@ -1,0 +1,28 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: diary-cli
+spec:
+  schedule: "0 0 * * *"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: diary-cli
+              image: ghcr.io/soli0222/diary-cli:latest
+              args:
+                - "run"
+                - "--yesterday"
+                - "--output"
+                - "none"
+                - "--discord"
+              env:
+                - name: TZ
+                  value: Asia/Tokyo
+              envFrom:
+                - secretRef:
+                    name: diary-cli-secrets

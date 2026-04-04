@@ -1,19 +1,22 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/spf13/viper"
 )
 
 type Config struct {
 	Misskey MisskeyConfig `mapstructure:"misskey"`
-	Claude  ClaudeConfig  `mapstructure:"claude"`
+	AI      AIConfig      `mapstructure:"ai"`
 	Diary   DiaryConfig   `mapstructure:"diary"`
-	Chat    ChatConfig    `mapstructure:"chat"`
 	Summaly SummalyConfig `mapstructure:"summaly"`
+	Discord DiscordConfig `mapstructure:"discord"`
 }
 
 type MisskeyConfig struct {
@@ -21,7 +24,14 @@ type MisskeyConfig struct {
 	Token       string `mapstructure:"token"`
 }
 
-type ClaudeConfig struct {
+type AIConfig struct {
+	DefaultProvider string           `mapstructure:"default_provider"`
+	Claude          AIProviderConfig `mapstructure:"claude"`
+	OpenAI          AIProviderConfig `mapstructure:"openai"`
+	Gemini          AIProviderConfig `mapstructure:"gemini"`
+}
+
+type AIProviderConfig struct {
 	APIKey string `mapstructure:"api_key"`
 	Model  string `mapstructure:"model"`
 }
@@ -30,75 +40,105 @@ type DiaryConfig struct {
 	OutputDir string `mapstructure:"output_dir"`
 	Author    string `mapstructure:"author"`
 	Editor    string `mapstructure:"editor"`
-}
-
-type ChatConfig struct {
-	MaxQuestions             int    `mapstructure:"max_questions"`
-	MinQuestions             int    `mapstructure:"min_questions"`
-	SummaryEvery             int    `mapstructure:"summary_every"`
-	MaxUnknownsBeforeConfirm int    `mapstructure:"max_unknowns_before_confirm"`
-	EmpathyStyle             string `mapstructure:"empathy_style"`
-	ProfileEnabled           bool   `mapstructure:"profile_enabled"`
-	ProfilePath              string `mapstructure:"profile_path"`
+	Timezone  string `mapstructure:"timezone"`
 }
 
 type SummalyConfig struct {
 	Endpoint string `mapstructure:"endpoint"`
 }
 
-func Load() (*Config, error) {
+type DiscordConfig struct {
+	WebhookURL string `mapstructure:"webhook_url"`
+}
+
+func DefaultConfigDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get home directory: %w", err)
+		return "", fmt.Errorf("failed to get home directory: %w", err)
+	}
+	return filepath.Join(home, ".config", "diary-cli"), nil
+}
+
+func DefaultConfigPath() (string, error) {
+	dir, err := DefaultConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "config.yaml"), nil
+}
+
+func Load() (*Config, error) {
+	cfgPath, err := DefaultConfigPath()
+	if err != nil {
+		return nil, err
 	}
 
-	configDir := filepath.Join(home, ".config", "diary-cli")
-	viper.SetConfigName("config")
-	viper.SetConfigType("yaml")
-	viper.AddConfigPath(configDir)
+	v := viper.New()
+	v.SetConfigFile(cfgPath)
+	v.SetConfigType("yaml")
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.AutomaticEnv()
 
-	// Defaults
-	viper.SetDefault("claude.model", "claude-sonnet-4-6")
-	viper.SetDefault("diary.author", "Soli")
-	viper.SetDefault("diary.editor", "")
-	viper.SetDefault("chat.max_questions", 8)
-	viper.SetDefault("chat.min_questions", 3)
-	viper.SetDefault("chat.summary_every", 2)
-	viper.SetDefault("chat.max_unknowns_before_confirm", 3)
-	viper.SetDefault("chat.empathy_style", "balanced")
-	viper.SetDefault("chat.profile_enabled", true)
-	viper.SetDefault("chat.profile_path", "")
-	viper.SetDefault("summaly.endpoint", "")
+	setDefaults(v)
+	bindEnv(v)
 
-	if err := viper.ReadInConfig(); err != nil {
-		return nil, fmt.Errorf("failed to read config: %w", err)
-	}
-
-	var cfg Config
-	if err := viper.Unmarshal(&cfg); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
-	}
-
-	if cfg.Misskey.InstanceURL == "" {
-		return nil, fmt.Errorf("misskey.instance_url is required")
-	}
-	if cfg.Misskey.Token == "" {
-		return nil, fmt.Errorf("misskey.token is required")
-	}
-	if cfg.Claude.APIKey == "" {
-		return nil, fmt.Errorf("claude.api_key is required")
-	}
-	if cfg.Diary.OutputDir == "" {
-		return nil, fmt.Errorf("diary.output_dir is required")
-	}
-
-	// Resolve editor: config > $EDITOR > vi
-	if cfg.Diary.Editor == "" {
-		cfg.Diary.Editor = os.Getenv("EDITOR")
-		if cfg.Diary.Editor == "" {
-			cfg.Diary.Editor = "vi"
+	if err := v.ReadInConfig(); err != nil {
+		var notFound viper.ConfigFileNotFoundError
+		if !errors.As(err, &notFound) && !errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("failed to read config: %w", err)
 		}
 	}
 
+	var cfg Config
+	if err := v.Unmarshal(&cfg); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
+	}
+
+	if cfg.Diary.Editor == "" {
+		cfg.Diary.Editor = EnvOrDefault("EDITOR", "vim")
+	}
+
 	return &cfg, nil
+}
+
+func setDefaults(v *viper.Viper) {
+	v.SetDefault("ai.default_provider", "claude")
+	v.SetDefault("ai.claude.model", "claude-sonnet-4-6")
+	v.SetDefault("ai.openai.model", "gpt-5.4-mini")
+	v.SetDefault("ai.gemini.model", "gemini-3.1-flash-preview")
+	v.SetDefault("diary.output_dir", "./diary")
+	v.SetDefault("diary.author", EnvOrDefault("USER", "Soli"))
+	v.SetDefault("diary.editor", EnvOrDefault("EDITOR", "vim"))
+	v.SetDefault("diary.timezone", "Asia/Tokyo")
+	v.SetDefault("summaly.endpoint", "")
+	v.SetDefault("discord.webhook_url", "")
+}
+
+func bindEnv(v *viper.Viper) {
+	_ = v.BindEnv("misskey.instance_url", "MISSKEY_INSTANCE_URL")
+	_ = v.BindEnv("misskey.token", "MISSKEY_TOKEN")
+	_ = v.BindEnv("ai.claude.api_key", "ANTHROPIC_API_KEY")
+	_ = v.BindEnv("ai.openai.api_key", "OPENAI_API_KEY")
+	_ = v.BindEnv("ai.gemini.api_key", "GOOGLE_API_KEY")
+	_ = v.BindEnv("discord.webhook_url", "DISCORD_WEBHOOK_URL")
+}
+
+func EnvOrDefault(key, fallback string) string {
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+		return v
+	}
+	return fallback
+}
+
+func (c *Config) DiaryLocation() (*time.Location, error) {
+	name := strings.TrimSpace(c.Diary.Timezone)
+	if name == "" {
+		name = "Asia/Tokyo"
+	}
+
+	loc, err := time.LoadLocation(name)
+	if err != nil {
+		return nil, fmt.Errorf("invalid diary.timezone %q: %w", name, err)
+	}
+	return loc, nil
 }
