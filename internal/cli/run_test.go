@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -167,7 +166,9 @@ func TestRunRunKeepsSummaryOnDiscordFailure(t *testing.T) {
 		return &config.Config{}, nil
 	}
 	diaryWorkflowRunner = func(ctx context.Context, cfg *config.Config, providerName string, progress io.Writer) (*diaryRunResult, error) {
-		fmt.Fprintln(progress, "progress")
+		if err := writeLine(progress, "progress"); err != nil {
+			return nil, err
+		}
 		return &diaryRunResult{
 			TargetDate: time.Date(2026, 4, 4, 0, 0, 0, 0, time.UTC),
 			Title:      "タイトル",
@@ -220,7 +221,9 @@ func TestRunSummaryKeepsOutputOnDiscordFailure(t *testing.T) {
 		return &config.Config{}, nil
 	}
 	diaryWorkflowRunner = func(ctx context.Context, cfg *config.Config, providerName string, progress io.Writer) (*diaryRunResult, error) {
-		fmt.Fprintln(progress, "summary progress")
+		if err := writeLine(progress, "summary progress"); err != nil {
+			return nil, err
+		}
 		return &diaryRunResult{
 			TargetDate: time.Date(2026, 4, 4, 0, 0, 0, 0, time.UTC),
 			Title:      "タイトル",

@@ -40,13 +40,19 @@ func runSummary(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Fprintln(stdout, generator.BuildSummaryText(result.TargetDate, len(result.Notes), result.Title, result.Summary))
+	if err := writeLine(stdout, generator.BuildSummaryText(result.TargetDate, len(result.Notes), result.Title, result.Summary)); err != nil {
+		return err
+	}
 
 	if summaryFlagDiscord {
 		if err := discordPoster(cfg, result); err != nil {
-			fmt.Fprintf(stderr, "Discord投稿に失敗しました: %v\n", err)
+			if writeErr := writeLine(stderr, fmt.Sprintf("Discord投稿に失敗しました: %v", err)); writeErr != nil {
+				return writeErr
+			}
 		} else {
-			fmt.Fprintln(stderr, "Discordへ投稿しました")
+			if err := writeLine(stderr, "Discordへ投稿しました"); err != nil {
+				return err
+			}
 		}
 	}
 

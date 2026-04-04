@@ -82,9 +82,13 @@ func runRun(cmd *cobra.Command, args []string) error {
 
 	if flagDiscord {
 		if err := discordPoster(cfg, result); err != nil {
-			fmt.Fprintf(stderr, "Discord投稿に失敗しました: %v\n", err)
+			if writeErr := writeLine(stderr, fmt.Sprintf("Discord投稿に失敗しました: %v", err)); writeErr != nil {
+				return writeErr
+			}
 		} else {
-			fmt.Fprintln(stderr, "Discordへ投稿しました")
+			if err := writeLine(stderr, "Discordへ投稿しました"); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -104,7 +108,9 @@ func runDiaryWorkflow(ctx context.Context, cfg *config.Config, providerName stri
 
 	startTime, endTime := resolveDiaryWindow(targetDate)
 	if progress != nil {
-		fmt.Fprintf(progress, "%s の対象期間: %s 〜 %s\n", targetDate.Format("2006-01-02"), startTime.Format(time.RFC3339), endTime.Format(time.RFC3339))
+		if err := writeLine(progress, fmt.Sprintf("%s の対象期間: %s 〜 %s", targetDate.Format("2006-01-02"), startTime.Format(time.RFC3339), endTime.Format(time.RFC3339))); err != nil {
+			return nil, err
+		}
 	}
 
 	notes, err := fetchNotesForWindow(cfg, startTime, endTime)
@@ -114,7 +120,9 @@ func runDiaryWorkflow(ctx context.Context, cfg *config.Config, providerName stri
 	notes = preprocess.EnrichNotesWithSummaly(filterNotes(notes), preprocess.NewSummalyClientWithEndpoint(cfg.Summaly.Endpoint))
 
 	if progress != nil {
-		fmt.Fprintf(progress, "Misskeyから%d件のノートを取得しました\n", len(notes))
+		if err := writeLine(progress, fmt.Sprintf("Misskeyから%d件のノートを取得しました", len(notes))); err != nil {
+			return nil, err
+		}
 	}
 	if len(notes) == 0 {
 		return &diaryRunResult{
@@ -185,12 +193,13 @@ func handleRunOutput(stdout, status io.Writer, cfg *config.Config, result *diary
 			return err
 		}
 		if status != nil {
-			fmt.Fprintf(status, "保存しました: %s\n", outputPath)
+			if err := writeLine(status, fmt.Sprintf("保存しました: %s", outputPath)); err != nil {
+				return err
+			}
 		}
 		return nil
 	case outputSummary:
-		fmt.Fprintln(stdout, generator.BuildSummaryText(result.TargetDate, len(result.Notes), result.Title, result.Summary))
-		return nil
+		return writeLine(stdout, generator.BuildSummaryText(result.TargetDate, len(result.Notes), result.Title, result.Summary))
 	case outputJSON:
 		payload := generator.BuildJSONOutput(
 			result.TargetDate,
@@ -204,8 +213,7 @@ func handleRunOutput(stdout, status io.Writer, cfg *config.Config, result *diary
 		if err != nil {
 			return fmt.Errorf("failed to encode json output: %w", err)
 		}
-		fmt.Fprintln(stdout, string(encoded))
-		return nil
+		return writeLine(stdout, string(encoded))
 	case outputNone:
 		return nil
 	default:
@@ -308,4 +316,12 @@ func saveDiary(outputDir string, date time.Time, content string) (string, error)
 	}
 
 	return outputPath, nil
+}
+
+func writeLine(w io.Writer, s string) error {
+	if w == nil {
+		return nil
+	}
+	_, err := fmt.Fprintln(w, s)
+	return err
 }
