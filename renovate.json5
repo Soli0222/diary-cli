@@ -1,18 +1,17 @@
 {
-  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended",
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: [
+    'config:recommended',
   ],
   timezone: 'Asia/Tokyo',
   prConcurrentLimit: 10,
   prHourlyLimit: 20,
-  "rangeStrategy": "bump",
-  "minimumReleaseAge": "24 hours",
-  "automerge": true,
-  "automergeType": "pr",
-  "platformAutomerge": true,
-  "packageRules": [
-    // AI SDK — 破壊的変更のリスクがあるため手動レビュー
+  rangeStrategy: 'bump',
+  minimumReleaseAge: '24 hours',
+  automerge: true,
+  automergeType: 'pr',
+  platformAutomerge: true,
+  packageRules: [
     {
       groupName: 'AI SDKs',
       matchPackageNames: [
@@ -23,29 +22,27 @@
       automerge: false,
       minimumReleaseAge: '3 days',
     },
-    // Go 標準拡張ライブラリ
     {
       groupName: 'golang.org/x',
-      matchPackagePatterns: ['^golang\\.org/x/'],
       automerge: true,
+      matchPackageNames: [
+        '/^golang\\.org/x//',
+      ],
     },
-    // Google Cloud / gRPC 関連（genai の間接依存）
     {
       groupName: 'Google Cloud and gRPC',
-      matchPackagePatterns: [
-        '^cloud\\.google\\.com/go',
-        '^google\\.golang\\.org/grpc',
-        '^google\\.golang\\.org/protobuf',
-        '^google\\.golang\\.org/genproto',
-        '^github\\.com/googleapis/',
-        '^github\\.com/google/',
-      ],
       automerge: true,
+      matchPackageNames: [
+        '/^cloud\\.google\\.com/go/',
+        '/^google\\.golang\\.org/grpc/',
+        '/^google\\.golang\\.org/protobuf/',
+        '/^google\\.golang\\.org/genproto/',
+        '/^github\\.com/googleapis//',
+        '/^github\\.com/google//',
+      ],
     },
-    // CLI フレームワーク（cobra / viper とその依存）
     {
       groupName: 'CLI framework (cobra/viper)',
-      matchPackagePatterns: ['^github\\.com/spf13/'],
       matchPackageNames: [
         'github.com/fsnotify/fsnotify',
         'github.com/go-viper/mapstructure',
@@ -53,25 +50,32 @@
         'github.com/subosito/gotenv',
         'github.com/pelletier/go-toml',
         'go.yaml.in/yaml',
+        '/^github\\.com/spf13//',
       ],
       automerge: true,
     },
-    // Go ツールチェイン + Docker ベースイメージ（バージョンを揃えるため同一 PR）
     {
       groupName: 'Go toolchain',
-      matchDatasources: ['docker'],
+      matchDatasources: [
+        'docker',
+      ],
       automerge: true,
     },
     {
       groupName: 'Go toolchain',
-      matchManagers: ['gomod'],
-      matchDepTypes: ['golang'],
+      matchManagers: [
+        'gomod',
+      ],
+      matchDepTypes: [
+        'golang',
+      ],
       automerge: true,
     },
-    // GitHub Actions
     {
       groupName: 'GitHub Actions',
-      matchManagers: ['github-actions'],
+      matchManagers: [
+        'github-actions',
+      ],
       automerge: true,
     },
   ],
