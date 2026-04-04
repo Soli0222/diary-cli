@@ -41,3 +41,4 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          GORELEASER_CURRENT_TAG: ${{ github.ref_name }}
