@@ -1,9 +1,10 @@
 package preprocess
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -49,19 +50,23 @@ func TestIsSpotifyURL(t *testing.T) {
 
 func TestEnrichNotesWithSummaly(t *testing.T) {
 	calls := map[string]int{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := NewSummalyClientWithEndpoint("https://summaly.example")
+	if client == nil {
+		t.Fatal("NewSummalyClientWithEndpoint() returned nil")
+	}
+
+	client.httpClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		raw := r.URL.Query().Get("url")
 		calls[raw]++
 
-		w.Header().Set("Content-Type", "application/json")
-		if _, err := fmt.Fprintf(w, `{"title":"Page for %s","description":"desc for %s","sitename":"Example","url":"%s"}`,
-			raw, raw, raw); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-	}))
-	defer server.Close()
-
-	client := NewSummalyClientWithEndpoint(server.URL)
+		body := fmt.Sprintf(`{"title":"Page for %s","description":"desc for %s","sitename":"Example","url":"%s"}`,
+			raw, raw, raw)
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(bytes.NewBufferString(body)),
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+		}, nil
+	})}
 
 	notes := []models.Note{
 		{
@@ -113,4 +118,10 @@ func TestEnrichNotesWithSummaly_SkipWhenClientNil(t *testing.T) {
 	if got[0].Text == nil || *got[0].Text != original {
 		t.Fatalf("note text should remain unchanged when client is nil, got: %v", got[0].Text)
 	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (fn roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
+	return fn(r)
 }

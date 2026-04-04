@@ -8,28 +8,28 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const diaryDayStartHour = 5
+
 var (
 	flagDate      string
 	flagYesterday bool
 
-	// Version is set at build time via ldflags.
 	Version = "dev"
 )
 
 func NewRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "diary-cli",
-		Short: "Misskeyノートを元にAIと対話しながら日記を生成するCLIツール",
+		Short: "Misskeyノートを要約して日記ベースを生成するCLIツール",
 	}
 
-	cmd.PersistentFlags().StringVar(&flagDate, "date", "", "対象日 (YYYY-MM-DD)")
-	cmd.PersistentFlags().BoolVar(&flagYesterday, "yesterday", false, "昨日の日記を作成")
+	cmd.PersistentFlags().StringVarP(&flagDate, "date", "d", "", "対象日 (YYYY-MM-DD, 明示指定時は05:00補正なし)")
+	cmd.PersistentFlags().BoolVarP(&flagYesterday, "yesterday", "y", false, "昨日の日記を作成")
 
 	cmd.AddCommand(newInitCmd())
 	cmd.AddCommand(newRunCmd())
 	cmd.AddCommand(newSummaryCmd())
 	cmd.AddCommand(newPushCmd())
-	cmd.AddCommand(newStatsCmd())
 	cmd.AddCommand(newVersionCmd())
 
 	return cmd
@@ -42,13 +42,14 @@ func Execute() {
 	}
 }
 
-// resolveDate determines the target date from flags.
-func resolveDate() (time.Time, error) {
-	return resolveTargetDate(time.Now(), flagDate, flagYesterday)
+func resolveDate(loc *time.Location) (time.Time, error) {
+	return resolveTargetDate(time.Now(), flagDate, flagYesterday, loc)
 }
 
-func resolveTargetDate(now time.Time, dateFlag string, yesterdayFlag bool) (time.Time, error) {
-	loc := now.Location()
+func resolveTargetDate(now time.Time, dateFlag string, yesterdayFlag bool, loc *time.Location) (time.Time, error) {
+	if loc == nil {
+		loc = now.Location()
+	}
 
 	if dateFlag != "" {
 		t, err := time.ParseInLocation("2006-01-02", dateFlag, loc)
@@ -58,16 +59,26 @@ func resolveTargetDate(now time.Time, dateFlag string, yesterdayFlag bool) (time
 		return normalizeToLocalMidnight(t, loc), nil
 	}
 
+	base := now.In(loc)
+	if base.Hour() < diaryDayStartHour {
+		base = base.AddDate(0, 0, -1)
+	}
 	if yesterdayFlag {
-		return normalizeToLocalMidnight(now.AddDate(0, 0, -1), loc), nil
+		base = base.AddDate(0, 0, -1)
 	}
 
-	return normalizeToLocalMidnight(now, loc), nil
+	return normalizeToLocalMidnight(base, loc), nil
+}
+
+func resolveDiaryWindow(targetDate time.Time) (time.Time, time.Time) {
+	start := time.Date(targetDate.Year(), targetDate.Month(), targetDate.Day(), diaryDayStartHour, 0, 0, 0, targetDate.Location())
+	return start, start.Add(24 * time.Hour)
 }
 
 func normalizeToLocalMidnight(t time.Time, loc *time.Location) time.Time {
 	if loc == nil {
 		loc = t.Location()
 	}
-	return time.Date(t.In(loc).Year(), t.In(loc).Month(), t.In(loc).Day(), 0, 0, 0, 0, loc)
+	inLoc := t.In(loc)
+	return time.Date(inLoc.Year(), inLoc.Month(), inLoc.Day(), 0, 0, 0, 0, loc)
 }

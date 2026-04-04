@@ -4,114 +4,72 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/soli0222/diary-cli/internal/models"
 )
 
 func TestBuildMarkdown(t *testing.T) {
-	date := time.Date(2026, 2, 15, 21, 30, 0, 0, time.FixedZone("Asia/Tokyo", 9*60*60))
-	author := "TestUser"
-	title := "テストの一日"
-	diaryBody := "今日はテストを書いた。"
-	summary := "テストに関するサマリー。"
+	date := time.Date(2026, 2, 15, 5, 0, 0, 0, time.FixedZone("Asia/Tokyo", 9*60*60))
+	result := BuildMarkdown(date, "TestUser", "テストの一日", "テストに関するサマリー。")
 
-	result := BuildMarkdown(date, author, title, diaryBody, summary)
-
-	// Check frontmatter
-	checks := []struct {
-		label    string
-		expected string
-	}{
-		{"frontmatter start", "---\n"},
-		{"title field", "title: 2026-02-15\n"},
-		{"author field", "author: TestUser\n"},
-		{"layout field", "layout: post\n"},
-		{"date field", "date: 2026-02-15T21:30\n"},
-		{"category field", "category: 日記\n"},
-		{"heading", "# テストの一日\n"},
-		{"diary body", "今日はテストを書いた。"},
-		{"summary heading", "# Misskeyサマリー\n"},
-		{"summary body", "テストに関するサマリー。"},
+	checks := []string{
+		"---\n",
+		"title: 2026-02-15\n",
+		"author: TestUser\n",
+		"layout: post\n",
+		"date: 2026-02-15T05:00\n",
+		"category: 日記\n",
+		"# テストの一日\n",
+		"# Misskeyサマリー\n",
+		"テストに関するサマリー。",
 	}
 
-	for _, c := range checks {
-		if !strings.Contains(result, c.expected) {
-			t.Errorf("BuildMarkdown() missing %s: %q\nGot:\n%s", c.label, c.expected, result)
+	for _, expected := range checks {
+		if !strings.Contains(result, expected) {
+			t.Fatalf("BuildMarkdown() missing %q\nGot:\n%s", expected, result)
 		}
 	}
 }
 
-func TestBuildMarkdown_EmptyDiaryBody(t *testing.T) {
+func TestBuildMarkdown_DoesNotIncludeDiaryBodySection(t *testing.T) {
 	date := time.Date(2026, 2, 15, 10, 0, 0, 0, time.UTC)
-	result := BuildMarkdown(date, "User", "Title", "", "Summary")
+	result := BuildMarkdown(date, "User", "Title", "Summary")
 
-	// Should still contain the structure
-	if !strings.Contains(result, "# Title\n") {
-		t.Error("should contain title heading")
-	}
-	if !strings.Contains(result, "# Misskeyサマリー\n") {
-		t.Error("should contain summary heading")
+	if strings.Count(result, "# ") != 2 {
+		t.Fatalf("expected exactly two headings, got:\n%s", result)
 	}
 }
 
-func TestBuildMarkdown_FrontmatterStructure(t *testing.T) {
-	date := time.Date(2026, 1, 5, 9, 0, 0, 0, time.UTC)
-	result := BuildMarkdown(date, "Author", "Title", "Body", "Summary")
+func TestBuildSummaryText(t *testing.T) {
+	date := time.Date(2026, 2, 15, 0, 0, 0, 0, time.UTC)
+	got := BuildSummaryText(date, 42, "タイトル", "本文")
 
-	// Verify frontmatter is properly delimited
-	parts := strings.SplitN(result, "---", 3)
-	if len(parts) < 3 {
-		t.Fatal("frontmatter should be delimited by ---")
-	}
-
-	frontmatter := parts[1]
-	if !strings.Contains(frontmatter, "title:") {
-		t.Error("frontmatter should contain title")
-	}
-	if !strings.Contains(frontmatter, "author:") {
-		t.Error("frontmatter should contain author")
-	}
-	if !strings.Contains(frontmatter, "date:") {
-		t.Error("frontmatter should contain date")
+	for _, expected := range []string{"2026-02-15 のサマリー", "ノート数: 42", "タイトル: タイトル", "本文"} {
+		if !strings.Contains(got, expected) {
+			t.Fatalf("missing %q in %q", expected, got)
+		}
 	}
 }
 
-func TestBuildMarkdown_DateFormatting(t *testing.T) {
-	tests := []struct {
-		name     string
-		date     time.Time
-		wantDate string
-		wantTime string
-	}{
-		{
-			name:     "single digit month and day",
-			date:     time.Date(2026, 1, 5, 8, 5, 0, 0, time.UTC),
-			wantDate: "title: 2026-01-05",
-			wantTime: "date: 2026-01-05T08:05",
-		},
-		{
-			name:     "double digit month and day",
-			date:     time.Date(2026, 12, 25, 23, 59, 0, 0, time.UTC),
-			wantDate: "title: 2026-12-25",
-			wantTime: "date: 2026-12-25T23:59",
-		},
+func TestBuildJSONOutput(t *testing.T) {
+	start := time.Date(2026, 2, 15, 5, 0, 0, 0, time.UTC)
+	end := start.Add(24 * time.Hour)
+	text := "note"
+	note := models.Note{
+		ID:        "abc",
+		CreatedAt: start,
+		Text:      &text,
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := BuildMarkdown(tt.date, "Author", "Title", "Body", "Summary")
-			if !strings.Contains(result, tt.wantDate) {
-				t.Errorf("expected %q in output", tt.wantDate)
-			}
-			if !strings.Contains(result, tt.wantTime) {
-				t.Errorf("expected %q in output", tt.wantTime)
-			}
-		})
+	got := BuildJSONOutput(start, start, end, "Title", "Summary", []models.Note{note})
+
+	if got.Date != "2026-02-15" {
+		t.Fatalf("Date = %q", got.Date)
 	}
-}
-
-func TestBuildMarkdown_TrailingNewline(t *testing.T) {
-	result := BuildMarkdown(time.Now(), "Author", "Title", "Body", "Summary")
-
-	if !strings.HasSuffix(result, "\n") {
-		t.Error("output should end with newline")
+	if got.NoteCount != 1 {
+		t.Fatalf("NoteCount = %d", got.NoteCount)
+	}
+	if len(got.Notes) != 1 || got.Notes[0].ID != "abc" || got.Notes[0].Text != "note" {
+		t.Fatalf("unexpected notes: %#v", got.Notes)
 	}
 }

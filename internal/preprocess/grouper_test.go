@@ -10,6 +10,8 @@ import (
 
 func strPtr(s string) *string { return &s }
 
+var tokyo = time.FixedZone("Asia/Tokyo", 9*60*60)
+
 // makeNote creates a note with text at the given UTC time.
 func makeNote(id string, text string, utcTime time.Time) models.Note {
 	return models.Note{
@@ -35,14 +37,14 @@ func TestGroupNotes_TimeGroupingInJST(t *testing.T) {
 	// UTC 12:00 = JST 21:00 → 夜
 	// UTC 20:00 = JST 05:00 → 早朝
 	notes := []models.Note{
-		makeNote("1", "morning note", time.Date(2026, 2, 15, 0, 0, 0, 0, time.UTC)),  // JST 09:00
+		makeNote("1", "morning note", time.Date(2026, 2, 15, 0, 0, 0, 0, time.UTC)),   // JST 09:00
 		makeNote("2", "afternoon note", time.Date(2026, 2, 15, 3, 0, 0, 0, time.UTC)), // JST 12:00
 		makeNote("3", "evening note", time.Date(2026, 2, 15, 8, 0, 0, 0, time.UTC)),   // JST 17:00
 		makeNote("4", "night note", time.Date(2026, 2, 15, 12, 0, 0, 0, time.UTC)),    // JST 21:00
 		makeNote("5", "early morning", time.Date(2026, 2, 14, 20, 0, 0, 0, time.UTC)), // JST 05:00
 	}
 
-	groups := GroupNotes(notes)
+	groups := GroupNotes(notes, tokyo)
 
 	expectedLabels := []string{
 		"早朝 (5:00-9:00)",
@@ -72,7 +74,7 @@ func TestGroupNotes_FiltersPureRenotes(t *testing.T) {
 		makeRenote("2", time.Date(2026, 2, 15, 1, 0, 0, 0, time.UTC)),
 	}
 
-	groups := GroupNotes(notes)
+	groups := GroupNotes(notes, tokyo)
 
 	totalNotes := 0
 	for _, g := range groups {
@@ -87,11 +89,11 @@ func TestGroupNotes_FiltersPureRenotes(t *testing.T) {
 func TestGroupNotes_SortsChronologically(t *testing.T) {
 	// Insert in reverse order
 	notes := []models.Note{
-		makeNote("2", "later", time.Date(2026, 2, 15, 1, 0, 0, 0, time.UTC)),  // JST 10:00
+		makeNote("2", "later", time.Date(2026, 2, 15, 1, 0, 0, 0, time.UTC)),   // JST 10:00
 		makeNote("1", "earlier", time.Date(2026, 2, 15, 0, 0, 0, 0, time.UTC)), // JST 09:00
 	}
 
-	groups := GroupNotes(notes)
+	groups := GroupNotes(notes, tokyo)
 
 	// Both should be in 午前 group
 	if len(groups) != 1 {
@@ -103,7 +105,7 @@ func TestGroupNotes_SortsChronologically(t *testing.T) {
 }
 
 func TestGroupNotes_EmptyInput(t *testing.T) {
-	groups := GroupNotes(nil)
+	groups := GroupNotes(nil, tokyo)
 
 	if len(groups) != 0 {
 		t.Errorf("GroupNotes(nil) returned %d groups, want 0", len(groups))
@@ -116,7 +118,7 @@ func TestGroupNotes_EmptyAfterFiltering(t *testing.T) {
 		makeRenote("2", time.Date(2026, 2, 15, 1, 0, 0, 0, time.UTC)),
 	}
 
-	groups := GroupNotes(notes)
+	groups := GroupNotes(notes, tokyo)
 
 	if len(groups) != 0 {
 		t.Errorf("GroupNotes() with only renotes returned %d groups, want 0", len(groups))
@@ -132,7 +134,7 @@ func TestGroupNotes_NightGroupBoundary(t *testing.T) {
 		makeNote("4", "early morning", time.Date(2026, 2, 15, 20, 0, 0, 0, time.UTC)), // JST 05:00 → 早朝
 	}
 
-	groups := GroupNotes(notes)
+	groups := GroupNotes(notes, tokyo)
 
 	labelMap := map[string]int{}
 	for _, g := range groups {
@@ -156,8 +158,8 @@ func TestFormatGroupedNotes(t *testing.T) {
 		makeNote("1", "test note", time.Date(2026, 2, 15, 0, 5, 0, 0, time.UTC)),
 	}
 
-	groups := GroupNotes(notes)
-	result := FormatGroupedNotes(groups)
+	groups := GroupNotes(notes, tokyo)
+	result := FormatGroupedNotes(groups, tokyo)
 
 	if !strings.Contains(result, "## 午前 (9:00-12:00)") {
 		t.Error("expected 午前 header in output")
@@ -176,8 +178,8 @@ func TestFormatGroupedNotes_SkipsEmptyText(t *testing.T) {
 		},
 	}
 
-	groups := GroupNotes(notes)
-	result := FormatGroupedNotes(groups)
+	groups := GroupNotes(notes, tokyo)
+	result := FormatGroupedNotes(groups, tokyo)
 
 	// Empty text notes should produce a header but no note lines
 	if strings.Contains(result, "- [") {
@@ -193,7 +195,7 @@ func TestFormatAllNotes(t *testing.T) {
 		makeRenote("3", time.Date(2026, 2, 15, 8, 0, 0, 0, time.UTC)), // should be filtered
 	}
 
-	result := FormatAllNotes(notes)
+	result := FormatAllNotes(notes, tokyo)
 
 	if !strings.Contains(result, "- [14:22] first note") {
 		t.Errorf("expected JST time 14:22 in output, got:\n%s", result)
@@ -212,7 +214,7 @@ func TestFormatAllNotes_SortsChronologically(t *testing.T) {
 		makeNote("1", "earlier", time.Date(2026, 2, 15, 1, 0, 0, 0, time.UTC)),
 	}
 
-	result := FormatAllNotes(notes)
+	result := FormatAllNotes(notes, tokyo)
 	lines := strings.Split(strings.TrimSpace(result), "\n")
 
 	if len(lines) != 2 {
@@ -227,7 +229,7 @@ func TestFormatAllNotes_SortsChronologically(t *testing.T) {
 }
 
 func TestFormatAllNotes_Empty(t *testing.T) {
-	result := FormatAllNotes(nil)
+	result := FormatAllNotes(nil, tokyo)
 	if result != "" {
 		t.Errorf("FormatAllNotes(nil) = %q, want empty string", result)
 	}
@@ -240,7 +242,7 @@ func TestGroupNotes_UTCToJSTConversion(t *testing.T) {
 		makeNote("1", "External IP BGP化に成功", time.Date(2026, 2, 15, 5, 5, 22, 0, time.UTC)),
 	}
 
-	groups := GroupNotes(notes)
+	groups := GroupNotes(notes, tokyo)
 
 	if len(groups) != 1 {
 		t.Fatalf("expected 1 group, got %d", len(groups))
@@ -249,7 +251,7 @@ func TestGroupNotes_UTCToJSTConversion(t *testing.T) {
 		t.Errorf("UTC 05:05 (JST 14:05) should be 午後, got %q", groups[0].Label)
 	}
 
-	formatted := FormatGroupedNotes(groups)
+	formatted := FormatGroupedNotes(groups, tokyo)
 	if !strings.Contains(formatted, "[14:05]") {
 		t.Errorf("expected [14:05] (JST), got:\n%s", formatted)
 	}

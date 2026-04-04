@@ -6,14 +6,16 @@ import (
 	"strings"
 )
 
+var run = runCommand
+
 // CommitAndPush stages, commits, and pushes the given file.
 func CommitAndPush(repoDir, filePath, date string) error {
-	if err := run(repoDir, "git", "add", filePath); err != nil {
+	if err := run(repoDir, "git", "add", "--", filePath); err != nil {
 		return fmt.Errorf("git add failed: %w", err)
 	}
 
 	commitMsg := fmt.Sprintf("diary: %s", date)
-	if err := run(repoDir, "git", "commit", "-m", commitMsg); err != nil {
+	if err := run(repoDir, "git", "commit", "-m", commitMsg, "--only", "--", filePath); err != nil {
 		return fmt.Errorf("git commit failed: %w", err)
 	}
 
@@ -24,7 +26,7 @@ func CommitAndPush(repoDir, filePath, date string) error {
 	return nil
 }
 
-func run(dir string, name string, args ...string) error {
+func runCommand(dir string, name string, args ...string) error {
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()

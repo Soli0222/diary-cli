@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/soli0222/diary-cli/internal/config"
 )
 
 func newInitCmd() *cobra.Command {
@@ -19,17 +21,14 @@ func newInitCmd() *cobra.Command {
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
-	home, err := os.UserHomeDir()
+	configDir, err := config.DefaultConfigDir()
 	if err != nil {
-		return fmt.Errorf("failed to get home directory: %w", err)
+		return err
 	}
-
-	configDir := filepath.Join(home, ".config", "diary-cli")
 	configPath := filepath.Join(configDir, "config.yaml")
 
-	// Check if config already exists
 	if _, err := os.Stat(configPath); err == nil {
-		fmt.Printf("⚠️  設定ファイルが既に存在します: %s\n", configPath)
+		fmt.Printf("設定ファイルが既に存在します: %s\n", configPath)
 		fmt.Print("上書きしますか？ (y/N) ")
 		scanner := bufio.NewScanner(os.Stdin)
 		if scanner.Scan() {
@@ -42,80 +41,76 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	scanner := bufio.NewScanner(os.Stdin)
-	fmt.Println("📝 diary-cli の初期設定を行います")
+	fmt.Println("diary-cli の初期設定を行います")
 
-	// Misskey settings
-	fmt.Println("--- Misskey設定 ---")
+	fmt.Println("\n[Misskey]")
 	instanceURL := prompt(scanner, "MisskeyインスタンスURL", "https://misskey.io")
 	token := prompt(scanner, "Misskeyアクセストークン", "")
 
-	// Claude settings
-	fmt.Println("\n--- Claude API設定 ---")
-	apiKey := prompt(scanner, "Claude APIキー", "")
-	model := prompt(scanner, "モデル", "claude-sonnet-4-6")
+	fmt.Println("\n[AI]")
+	defaultProvider := prompt(scanner, "デフォルトAIプロバイダ", "claude")
 
-	// Diary settings
-	fmt.Println("\n--- 日記設定 ---")
-	outputDir := prompt(scanner, "日記の出力先ディレクトリ", "")
-	author := prompt(scanner, "著者名", "Soli")
-	editor := prompt(scanner, "エディタ", envOrDefault("EDITOR", "vim"))
+	fmt.Println("\n[Claude]")
+	claudeAPIKey := prompt(scanner, "Claude APIキー", "")
+	claudeModel := prompt(scanner, "Claudeモデル", "claude-sonnet-4-6")
 
-	// Chat settings
-	fmt.Println("\n--- 対話設定 ---")
-	maxQ := prompt(scanner, "最大質問数", "8")
-	minQ := prompt(scanner, "最低質問数", "3")
-	summaryEvery := prompt(scanner, "要約確認の間隔（何ターンごと）", "2")
-	maxUnknowns := prompt(scanner, "確認優先に切り替える未確認点の閾値", "3")
-	empathyStyle := prompt(scanner, "共感スタイル（light/balanced/deep）", "balanced")
-	profileEnabled := prompt(scanner, "プロファイル学習を有効化", "true")
-	profilePath := prompt(scanner, "プロファイル保存先（空でデフォルト）", "")
+	fmt.Println("\n[OpenAI]")
+	openAIAPIKey := prompt(scanner, "OpenAI APIキー", "")
+	openAIModel := prompt(scanner, "OpenAIモデル", "gpt-5.4-mini")
 
-	// Summaly settings
-	fmt.Println("\n--- Summaly設定（任意） ---")
-	summalyEndpoint := prompt(scanner, "Summalyエンドポイント", "")
+	fmt.Println("\n[Gemini]")
+	geminiAPIKey := prompt(scanner, "Gemini APIキー", "")
+	geminiModel := prompt(scanner, "Geminiモデル", "gemini-3.1-flash-preview")
 
-	// Build config YAML
-	config := fmt.Sprintf(`# Misskey設定
-misskey:
+	fmt.Println("\n[Diary]")
+	outputDir := prompt(scanner, "出力先ディレクトリ", "./diary")
+	author := prompt(scanner, "author", config.EnvOrDefault("USER", "Soli"))
+	editor := prompt(scanner, "editor", config.EnvOrDefault("EDITOR", "vim"))
+	timezone := prompt(scanner, "timezone", "Asia/Tokyo")
+
+	fmt.Println("\n[Summaly]")
+	summalyEndpoint := prompt(scanner, "Summalyエンドポイント (任意)", "")
+
+	fmt.Println("\n[Discord]")
+	webhookURL := prompt(scanner, "Discord Webhook URL (任意)", "")
+
+	content := fmt.Sprintf(`misskey:
   instance_url: "%s"
   token: "%s"
 
-# Claude API設定
-claude:
-  api_key: "%s"
-  model: "%s"
+ai:
+  default_provider: "%s"
+  claude:
+    api_key: "%s"
+    model: "%s"
+  openai:
+    api_key: "%s"
+    model: "%s"
+  gemini:
+    api_key: "%s"
+    model: "%s"
 
-# 日記設定
 diary:
   output_dir: "%s"
   author: "%s"
   editor: "%s"
+  timezone: "%s"
 
-# 対話設定
-chat:
-  max_questions: %s
-  min_questions: %s
-  summary_every: %s
-  max_unknowns_before_confirm: %s
-  empathy_style: "%s"
-  profile_enabled: %s
-  profile_path: "%s"
-
-# Summaly設定（任意）
 summaly:
   endpoint: "%s"
-`, instanceURL, token, apiKey, model, outputDir, author, editor, maxQ, minQ, summaryEvery, maxUnknowns, empathyStyle, profileEnabled, profilePath, summalyEndpoint)
 
-	// Create directory and write file
-	if err := os.MkdirAll(configDir, 0755); err != nil {
+discord:
+  webhook_url: "%s"
+`, instanceURL, token, defaultProvider, claudeAPIKey, claudeModel, openAIAPIKey, openAIModel, geminiAPIKey, geminiModel, outputDir, author, editor, timezone, summalyEndpoint, webhookURL)
+
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
-
-	if err := os.WriteFile(configPath, []byte(config), 0600); err != nil {
+	if err := os.WriteFile(configPath, []byte(content), 0o600); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	fmt.Printf("\n✅ 設定ファイルを作成しました: %s\n", configPath)
+	fmt.Printf("設定ファイルを作成しました: %s\n", configPath)
 	return nil
 }
 
@@ -133,11 +128,4 @@ func prompt(scanner *bufio.Scanner, label, defaultVal string) string {
 		}
 	}
 	return defaultVal
-}
-
-func envOrDefault(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
 }
