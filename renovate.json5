@@ -73,6 +73,15 @@
         'golang',
       ],
       automerge: true,
+      semanticCommitType: 'fix',
+    },
+    {
+      matchManagers: [
+        'gomod',
+      ],
+      commitMessageTopic: 'Go {{depName}}',
+      semanticCommitType: 'fix',
+      automerge: true,
     },
     {
       groupName: 'GitHub Actions',
