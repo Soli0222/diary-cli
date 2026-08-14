@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.3](https://github.com/Soli0222/diary-cli/compare/v2.0.2...v2.0.3) (2026-08-14)
+
+
+### バグ修正・依存関係の更新
+
+* **deps:** update go toolchain to v1.26.6 ([#61](https://github.com/Soli0222/diary-cli/issues/61)) ([826e213](https://github.com/Soli0222/diary-cli/commit/826e21373469d8c2660aa938d14bb9a1762a8362))
+
 ## [2.0.2](https://github.com/Soli0222/diary-cli/compare/v2.0.1...v2.0.2) (2026-07-29)
 
 
