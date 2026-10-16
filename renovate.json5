@@ -4,6 +4,7 @@
     'config:recommended',
     'security:minimumReleaseAgeNpm',
   ],
+  pinDigests: false,
   timezone: 'Asia/Tokyo',
   assignees: [
     'Soli0222',
