@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.0.4](https://github.com/Soli0222/diary-cli/compare/v2.0.3...v2.0.4) (2026-10-16)
+
+
+### バグ修正・依存関係の更新
+
+* **ci:** restore Renovate status checks and surface errors ([#81](https://github.com/Soli0222/diary-cli/issues/81)) ([45ec807](https://github.com/Soli0222/diary-cli/commit/45ec8076f014e212a8f24b6712caa4b751fff304))
+* **deps:** update ai sdks ([#23](https://github.com/Soli0222/diary-cli/issues/23)) ([ca70497](https://github.com/Soli0222/diary-cli/commit/ca704976bff6e851bfbebacef2532a1be3183754))
+* **deps:** update go github.com/openai/openai-go/v3 to v3.78.0 ([#83](https://github.com/Soli0222/diary-cli/issues/83)) ([6e64b2e](https://github.com/Soli0222/diary-cli/commit/6e64b2e2d45eb38b17b9c3b8aa629f044c5f4626))
+* **deps:** update go toolchain to v1.27.2 ([#64](https://github.com/Soli0222/diary-cli/issues/64)) ([c2bd415](https://github.com/Soli0222/diary-cli/commit/c2bd415a2b1272883cc511ac54c577b33ab0cde9))
+
 ## [2.0.3](https://github.com/Soli0222/diary-cli/compare/v2.0.2...v2.0.3) (2026-08-14)
 
 
