@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.5](https://github.com/Soli0222/diary-cli/compare/v2.0.4...v2.0.5) (2026-10-17)
+
+
+### バグ修正・依存関係の更新
+
+* **deps:** update go github.com/openai/openai-go/v3 to v3.79.0 ([#87](https://github.com/Soli0222/diary-cli/issues/87)) ([628f06c](https://github.com/Soli0222/diary-cli/commit/628f06ccb119a928d519654aa808dfe5a7409ccd))
+
 ## [2.0.4](https://github.com/Soli0222/diary-cli/compare/v2.0.3...v2.0.4) (2026-10-16)
 
 
