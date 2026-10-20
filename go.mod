@@ -1,6 +1,6 @@
 module github.com/soli0222/diary-cli
 
-go 1.27.2
+go 1.27.3
 
 require (
 	github.com/anthropics/anthropic-sdk-go v1.82.0
