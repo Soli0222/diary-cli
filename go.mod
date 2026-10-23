@@ -4,7 +4,7 @@ go 1.27.3
 
 require (
 	github.com/anthropics/anthropic-sdk-go v1.82.0
-	github.com/openai/openai-go/v3 v3.85.1
+	github.com/openai/openai-go/v3 v3.86.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	google.golang.org/genai v1.75.0
