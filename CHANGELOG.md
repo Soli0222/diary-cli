@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.0.7](https://github.com/Soli0222/diary-cli/compare/v2.0.6...v2.0.7) (2026-10-31)
+
+
+### バグ修正・依存関係の更新
+
+* **deps:** update go github.com/anthropics/anthropic-sdk-go/v2 to v2.4.0 ([#110](https://github.com/Soli0222/diary-cli/issues/110)) ([6259f78](https://github.com/Soli0222/diary-cli/commit/6259f78aa2992f7dcbc4ddb2846665ee34c88f8a))
+* **deps:** update go github.com/openai/openai-go/v3 to v3.88.0 ([#109](https://github.com/Soli0222/diary-cli/issues/109)) ([2dfe36e](https://github.com/Soli0222/diary-cli/commit/2dfe36ed444a0c0293131959b877331d2373a607))
+* **deps:** update go github.com/openai/openai-go/v3 to v3.89.0 ([#111](https://github.com/Soli0222/diary-cli/issues/111)) ([80e9a1c](https://github.com/Soli0222/diary-cli/commit/80e9a1c6272699635384262d6e55c72c82653e86))
+* **deps:** update go github.com/openai/openai-go/v3 to v3.90.0 ([#112](https://github.com/Soli0222/diary-cli/issues/112)) ([8781a71](https://github.com/Soli0222/diary-cli/commit/8781a716feeee1eb81e1ddd00d1cd46eb9c3730e))
+* **deps:** update go github.com/openai/openai-go/v3 to v3.91.0 ([#114](https://github.com/Soli0222/diary-cli/issues/114)) ([5a143ec](https://github.com/Soli0222/diary-cli/commit/5a143ecfd671f1b409cdfd12dbf2d4332ce5b7e8))
+* **deps:** update go google.golang.org/genai to v1.76.0 ([#106](https://github.com/Soli0222/diary-cli/issues/106)) ([734c094](https://github.com/Soli0222/diary-cli/commit/734c094a88e264d61dee84bb46c8a8cacf0708df))
+
 ## [2.0.6](https://github.com/Soli0222/diary-cli/compare/v2.0.5...v2.0.6) (2026-10-24)
 
 
