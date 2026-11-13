@@ -3,7 +3,7 @@ module github.com/soli0222/diary-cli
 go 1.27.4
 
 require (
-	github.com/anthropics/anthropic-sdk-go v1.84.0
+	github.com/anthropics/anthropic-sdk-go/v2 v2.9.0
 	github.com/anthropics/anthropic-sdk-go/v2 v2.9.0
 	github.com/openai/openai-go/v3 v3.99.0
 	github.com/spf13/cobra v1.10.2
