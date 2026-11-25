@@ -5,7 +5,7 @@ go 1.27.4
 require (
 	github.com/anthropics/anthropic-sdk-go v1.84.0
 	github.com/anthropics/anthropic-sdk-go/v2 v2.14.0
-	github.com/openai/openai-go/v3 v3.105.0
+	github.com/openai/openai-go/v3 v3.107.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	google.golang.org/genai v1.79.1
